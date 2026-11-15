@@ -1,0 +1,263 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Private player slot cabinet state, bankroll, and lifetime session metrics.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Firebase Auth UID of the player."
+        },
+        "displayName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80,
+          "description": "Player display name."
+        },
+        "balance": {
+          "type": "number",
+          "description": "Current bankroll in EUR."
+        },
+        "activeLines": {
+          "type": "number",
+          "description": "Selected active paylines (1 to 20)."
+        },
+        "betPerLine": {
+          "type": "number",
+          "description": "Selected bet per line in EUR (0.10 to 25.00)."
+        },
+        "freeSpinsRemaining": {
+          "type": "number",
+          "description": "Remaining 3x Free Spins count."
+        },
+        "freeSpinsTotalWin": {
+          "type": "number",
+          "description": "Accumulated win during the current Free Spins round."
+        },
+        "totalSpins": {
+          "type": "number",
+          "description": "Total spins completed."
+        },
+        "totalWagered": {
+          "type": "number",
+          "description": "Total EUR wagered."
+        },
+        "totalWon": {
+          "type": "number",
+          "description": "Total EUR won."
+        },
+        "biggestWin": {
+          "type": "number",
+          "description": "Largest single-spin win in EUR."
+        },
+        "freeSpinsTriggered": {
+          "type": "number",
+          "description": "Total times 3+ Scatters triggered Free Spins."
+        },
+        "peakBalance": {
+          "type": "number",
+          "description": "Highest bankroll reached in EUR."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of profile creation."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of last update."
+        }
+      },
+      "required": [
+        "uid",
+        "displayName",
+        "balance",
+        "activeLines",
+        "betPerLine",
+        "freeSpinsRemaining",
+        "freeSpinsTotalWin",
+        "totalSpins",
+        "totalWagered",
+        "totalWon",
+        "biggestWin",
+        "freeSpinsTriggered",
+        "peakBalance",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "SpinRecord": {
+      "title": "SpinRecord",
+      "description": "Immutable spin history entry for a player's cabinet ledger.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Owner Firebase Auth UID."
+        },
+        "totalBet": {
+          "type": "number",
+          "description": "Wagered EUR on this spin (0 on Free Spins)."
+        },
+        "totalWin": {
+          "type": "number",
+          "description": "Total EUR won on this spin."
+        },
+        "balanceAfter": {
+          "type": "number",
+          "description": "Player balance immediately after this spin."
+        },
+        "activeLines": {
+          "type": "number",
+          "description": "Paylines active on this spin."
+        },
+        "betPerLine": {
+          "type": "number",
+          "description": "Bet per line in EUR."
+        },
+        "wasFreeSpin": {
+          "type": "boolean",
+          "description": "Whether this spin used a 3x Free Spin."
+        },
+        "freeSpinsAwarded": {
+          "type": "number",
+          "description": "Number of Free Spins triggered on this spin."
+        },
+        "winningLineCount": {
+          "type": "number",
+          "description": "Count of winning paylines."
+        },
+        "summary": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "description": "Human-readable outcome summary."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of the spin."
+        }
+      },
+      "required": [
+        "uid",
+        "totalBet",
+        "totalWin",
+        "balanceAfter",
+        "activeLines",
+        "betPerLine",
+        "wasFreeSpin",
+        "freeSpinsAwarded",
+        "winningLineCount",
+        "summary",
+        "createdAt"
+      ]
+    },
+    "LeaderboardEntry": {
+      "title": "LeaderboardEntry",
+      "description": "Public high-roller hall of fame record without PII.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Player Firebase Auth UID."
+        },
+        "displayName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80,
+          "description": "Public player display name."
+        },
+        "biggestWin": {
+          "type": "number",
+          "description": "Largest single-spin win in EUR."
+        },
+        "peakBalance": {
+          "type": "number",
+          "description": "Highest bankroll reached in EUR."
+        },
+        "totalSpins": {
+          "type": "number",
+          "description": "Total spins completed."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of last leaderboard update."
+        }
+      },
+      "required": [
+        "uid",
+        "displayName",
+        "biggestWin",
+        "peakBalance",
+        "totalSpins",
+        "updatedAt"
+      ]
+    },
+    "ProgressiveJackpot": {
+      "title": "ProgressiveJackpot",
+      "description": "Shared progressive jackpot pot seeded at 10 000 EUR.",
+      "type": "object",
+      "properties": {
+        "amount": {
+          "type": "number",
+          "description": "Current progressive jackpot amount in EUR (>= 10000)."
+        },
+        "lastWinnerName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80,
+          "description": "Display name of the last progressive jackpot winner."
+        },
+        "lastWonAmount": {
+          "type": "number",
+          "description": "Amount won on the last progressive jackpot trigger."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of the last jackpot update."
+        }
+      },
+      "required": ["amount", "lastWinnerName", "lastWonAmount", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": {
+        "$ref": "#/entities/UserProfile"
+      },
+      "description": "Private player profile and cabinet ledger state."
+    },
+    "/users/{userId}/spins/{spinId}": {
+      "schema": {
+        "$ref": "#/entities/SpinRecord"
+      },
+      "description": "Immutable spin ledger subcollection owned by the user."
+    },
+    "/leaderboard/{userId}": {
+      "schema": {
+        "$ref": "#/entities/LeaderboardEntry"
+      },
+      "description": "Public high-roller leaderboard entries containing zero PII."
+    },
+    "/jackpots/{jackpotId}": {
+      "schema": {
+        "$ref": "#/entities/ProgressiveJackpot"
+      },
+      "description": "Shared progressive jackpot state."
+    }
+  }
+}

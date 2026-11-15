@@ -1,0 +1,334 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global default-deny safety net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Global Hardened Primitives ---
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerified() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidNumber(val, minVal, maxVal) {
+      return (val is int || val is float) && val >= minVal && val <= maxVal;
+    }
+
+    // --- Validation Blueprints ---
+    function isValidUserProfile(data, userId) {
+      return data.keys().hasAll([
+        'uid',
+        'displayName',
+        'balance',
+        'activeLines',
+        'betPerLine',
+        'freeSpinsRemaining',
+        'freeSpinsTotalWin',
+        'totalSpins',
+        'totalWagered',
+        'totalWon',
+        'biggestWin',
+        'freeSpinsTriggered',
+        'peakBalance',
+        'createdAt',
+        'updatedAt'
+      ])
+      && data.keys().hasOnly([
+        'uid',
+        'displayName',
+        'balance',
+        'activeLines',
+        'betPerLine',
+        'freeSpinsRemaining',
+        'freeSpinsTotalWin',
+        'totalSpins',
+        'totalWagered',
+        'totalWon',
+        'biggestWin',
+        'freeSpinsTriggered',
+        'peakBalance',
+        'createdAt',
+        'updatedAt'
+      ])
+      && isValidId(data.uid)
+      && data.uid == request.auth.uid
+      && data.uid == userId
+      && data.displayName is string
+      && data.displayName.size() >= 1
+      && data.displayName.size() <= 80
+      && isValidNumber(data.balance, 0, 100000000)
+      && data.activeLines is int
+      && data.activeLines >= 1
+      && data.activeLines <= 20
+      && isValidNumber(data.betPerLine, 0.1, 25)
+      && data.freeSpinsRemaining is int
+      && data.freeSpinsRemaining >= 0
+      && data.freeSpinsRemaining <= 1000
+      && isValidNumber(data.freeSpinsTotalWin, 0, 100000000)
+      && data.totalSpins is int
+      && data.totalSpins >= 0
+      && data.totalSpins <= 10000000
+      && isValidNumber(data.totalWagered, 0, 1000000000)
+      && isValidNumber(data.totalWon, 0, 1000000000)
+      && isValidNumber(data.biggestWin, 0, 100000000)
+      && data.freeSpinsTriggered is int
+      && data.freeSpinsTriggered >= 0
+      && data.freeSpinsTriggered <= 1000000
+      && isValidNumber(data.peakBalance, 0, 100000000)
+      && data.createdAt is timestamp
+      && data.updatedAt is timestamp;
+    }
+
+    function isValidSpinRecord(data, userId) {
+      return data.keys().hasAll([
+        'uid',
+        'totalBet',
+        'totalWin',
+        'balanceAfter',
+        'activeLines',
+        'betPerLine',
+        'wasFreeSpin',
+        'freeSpinsAwarded',
+        'winningLineCount',
+        'summary',
+        'createdAt'
+      ])
+      && data.keys().hasOnly([
+        'uid',
+        'totalBet',
+        'totalWin',
+        'balanceAfter',
+        'activeLines',
+        'betPerLine',
+        'wasFreeSpin',
+        'freeSpinsAwarded',
+        'winningLineCount',
+        'summary',
+        'createdAt'
+      ])
+      && isValidId(data.uid)
+      && data.uid == request.auth.uid
+      && data.uid == userId
+      && isValidNumber(data.totalBet, 0, 500)
+      && isValidNumber(data.totalWin, 0, 100000000)
+      && isValidNumber(data.balanceAfter, 0, 100000000)
+      && data.activeLines is int
+      && data.activeLines >= 1
+      && data.activeLines <= 20
+      && isValidNumber(data.betPerLine, 0.1, 25)
+      && data.wasFreeSpin is bool
+      && data.freeSpinsAwarded is int
+      && data.freeSpinsAwarded >= 0
+      && data.freeSpinsAwarded <= 100
+      && data.winningLineCount is int
+      && data.winningLineCount >= 0
+      && data.winningLineCount <= 20
+      && data.summary is string
+      && data.summary.size() >= 1
+      && data.summary.size() <= 200
+      && data.createdAt is timestamp;
+    }
+
+    function isValidLeaderboardEntry(data, userId) {
+      return data.keys().hasAll([
+        'uid',
+        'displayName',
+        'biggestWin',
+        'peakBalance',
+        'totalSpins',
+        'updatedAt'
+      ])
+      && data.keys().hasOnly([
+        'uid',
+        'displayName',
+        'biggestWin',
+        'peakBalance',
+        'totalSpins',
+        'updatedAt'
+      ])
+      && isValidId(data.uid)
+      && data.uid == request.auth.uid
+      && data.uid == userId
+      && data.displayName is string
+      && data.displayName.size() >= 1
+      && data.displayName.size() <= 80
+      && isValidNumber(data.biggestWin, 0, 100000000)
+      && isValidNumber(data.peakBalance, 0, 100000000)
+      && data.totalSpins is int
+      && data.totalSpins >= 0
+      && data.totalSpins <= 10000000
+      && data.updatedAt is timestamp;
+    }
+
+    function isValidProgressiveJackpot(data) {
+      return data.keys().hasAll([
+        'amount',
+        'lastWinnerName',
+        'lastWonAmount',
+        'updatedAt'
+      ])
+      && data.keys().hasOnly([
+        'amount',
+        'lastWinnerName',
+        'lastWonAmount',
+        'updatedAt'
+      ])
+      && isValidNumber(data.amount, 10000, 100000000)
+      && data.lastWinnerName is string
+      && data.lastWinnerName.size() >= 1
+      && data.lastWinnerName.size() <= 80
+      && isValidNumber(data.lastWonAmount, 0, 100000000)
+      && data.updatedAt is timestamp;
+    }
+
+    // --- Collection Rules ---
+
+    // Private User Profile & Cabinet Ledger
+    match /users/{userId} {
+      allow get: if isValidId(userId) && isOwner(userId);
+      allow list: if false;
+
+      allow create: if isVerified()
+        && isValidId(userId)
+        && isOwner(userId)
+        && isValidUserProfile(incoming(), userId)
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+
+      allow update: if isVerified()
+        && isValidId(userId)
+        && isOwner(userId)
+        && isValidUserProfile(incoming(), userId)
+        && incoming().uid == existing().uid
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'displayName',
+          'balance',
+          'activeLines',
+          'betPerLine',
+          'freeSpinsRemaining',
+          'freeSpinsTotalWin',
+          'totalSpins',
+          'totalWagered',
+          'totalWon',
+          'biggestWin',
+          'freeSpinsTriggered',
+          'peakBalance',
+          'updatedAt'
+        ]);
+
+      allow delete: if false;
+
+      // Immutable Spin History Subcollection
+      match /spins/{spinId} {
+        allow get: if isValidId(userId)
+          && isValidId(spinId)
+          && isOwner(userId)
+          && exists(/databases/$(database)/documents/users/$(userId));
+
+        allow list: if isValidId(userId)
+          && isOwner(userId)
+          && resource.data.uid == request.auth.uid;
+
+        allow create: if isVerified()
+          && isValidId(userId)
+          && isValidId(spinId)
+          && isOwner(userId)
+          && isValidSpinRecord(incoming(), userId)
+          && incoming().createdAt == request.time
+          && exists(/databases/$(database)/documents/users/$(userId));
+
+        allow update, delete: if false;
+      }
+    }
+
+    // Public High-Roller Leaderboard (Zero PII)
+    match /leaderboard/{userId} {
+      allow get: if isValidId(userId);
+      allow list: if resource.data.biggestWin >= 0;
+
+      allow create: if isVerified()
+        && isValidId(userId)
+        && isOwner(userId)
+        && isValidLeaderboardEntry(incoming(), userId)
+        && incoming().updatedAt == request.time;
+
+      allow update: if isVerified()
+        && isValidId(userId)
+        && isOwner(userId)
+        && isValidLeaderboardEntry(incoming(), userId)
+        && incoming().uid == existing().uid
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'displayName',
+          'biggestWin',
+          'peakBalance',
+          'totalSpins',
+          'updatedAt'
+        ]);
+
+      allow delete: if false;
+    }
+
+    // Shared Progressive Jackpot
+    match /jackpots/{jackpotId} {
+      allow get: if isValidId(jackpotId) && jackpotId == 'progressive';
+      allow list: if false;
+
+      allow create: if isVerified()
+        && isValidId(jackpotId)
+        && jackpotId == 'progressive'
+        && isValidProgressiveJackpot(incoming())
+        && incoming().amount >= 10000
+        && incoming().updatedAt == request.time;
+
+      allow update: if isVerified()
+        && isValidId(jackpotId)
+        && jackpotId == 'progressive'
+        && isValidProgressiveJackpot(incoming())
+        && incoming().updatedAt == request.time
+        && (
+          // Action: Spin contribution (atomic monotonic increment up to 15 EUR per spin)
+          (incoming().diff(existing()).affectedKeys().hasOnly(['amount', 'updatedAt'])
+            && incoming().amount >= existing().amount
+            && incoming().amount <= existing().amount + 15)
+          ||
+          // Action: Jackpot claimed and reset to seed
+          (incoming().diff(existing()).affectedKeys().hasOnly([
+            'amount',
+            'lastWinnerName',
+            'lastWonAmount',
+            'updatedAt'
+          ])
+            && incoming().amount == 10000
+            && incoming().lastWonAmount >= 10000)
+        );
+
+      allow delete: if false;
+    }
+  }
+}

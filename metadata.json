@@ -1,0 +1,6 @@
+{
+  "name": "Noël Royale",
+  "description": "Festive 5x3 Christmas slot machine with 20 paylines, Santa Wilds, and 3x North Star Free Spins.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

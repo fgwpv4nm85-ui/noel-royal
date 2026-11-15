@@ -1,0 +1,91 @@
+@import "tailwindcss";
+
+@theme {
+  --font-display: "Cinzel", Georgia, serif;
+  --font-sans: "Plus Jakarta Sans", system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+}
+
+@layer base {
+  html,
+  body {
+    height: 100%;
+    margin: 0;
+    background-color: #081510;
+    color: #faf6ee;
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+}
+
+@keyframes reelCycle {
+  0% {
+    transform: translateY(-6%);
+    opacity: 0.72;
+  }
+  50% {
+    transform: translateY(6%);
+    opacity: 0.92;
+  }
+  100% {
+    transform: translateY(-6%);
+    opacity: 0.72;
+  }
+}
+
+@keyframes reelSettle {
+  0% {
+    transform: translateY(-14px) scale(0.98);
+  }
+  65% {
+    transform: translateY(4px) scale(1.01);
+  }
+  100% {
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes winPulse {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.06);
+  }
+}
+
+@keyframes paylineDraw {
+  0% {
+    stroke-dashoffset: 1000;
+  }
+  100% {
+    stroke-dashoffset: 0;
+  }
+}
+
+.animate-reel-cycle {
+  animation: reelCycle 0.14s linear infinite;
+}
+
+.animate-reel-settle {
+  animation: reelSettle 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-win-tile {
+  animation: winPulse 0.9s cubic-bezier(0.16, 1, 0.3, 1) infinite;
+}
+
+.animate-payline-draw {
+  stroke-dasharray: 1000;
+  animation: paylineDraw 0.45s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-reel-cycle,
+  .animate-reel-settle,
+  .animate-win-tile,
+  .animate-payline-draw {
+    animation: none !important;
+  }
+}
