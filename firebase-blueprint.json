@@ -24,7 +24,7 @@
         },
         "activeLines": {
           "type": "number",
-          "description": "Selected active paylines (1 to 20)."
+          "description": "Selected active paylines (1 to 50)."
         },
         "betPerLine": {
           "type": "number",

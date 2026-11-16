@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
 import { Trophy, X } from 'lucide-react';
 import { formatEuro, PAYLINES, PROGRESSIVE_SEED, SYMBOL_ORDER, SYMBOLS } from '../game/constants';
+import { getTranslation, LanguageCode } from '../game/i18n';
 import { SlotSymbolArt } from './SlotSymbolArt';
 
 interface PaytableModalProps {
   isOpen: boolean;
+  language: LanguageCode;
   betPerLine: number;
   activeLines: number;
   progressiveJackpot: number;
@@ -13,6 +15,7 @@ interface PaytableModalProps {
 
 export const PaytableModal: React.FC<PaytableModalProps> = ({
   isOpen,
+  language,
   betPerLine,
   activeLines,
   progressiveJackpot,
@@ -22,6 +25,7 @@ export const PaytableModal: React.FC<PaytableModalProps> = ({
 
   if (!isOpen) return null;
 
+  const t = getTranslation(language);
   const totalBet = betPerLine * activeLines;
   const inspectedLine = PAYLINES.find((l) => l.id === selectedLineId) ?? PAYLINES[0];
 
@@ -40,16 +44,16 @@ export const PaytableModal: React.FC<PaytableModalProps> = ({
               id="paytable-title"
               className="font-display text-xl sm:text-2xl font-bold tracking-wider text-[#FDE68A]"
             >
-              Paytable & 20 Paylines
+              {t.paytableTitle}
             </h2>
             <p className="text-xs sm:text-sm text-[#D6D0C4] mt-0.5 tabular-nums">
-              Payouts shown for current stake: {formatEuro(betPerLine)} / line · {activeLines} lines ({formatEuro(totalBet)} total)
+              {t.paytableStakeLine(formatEuro(betPerLine), activeLines, formatEuro(totalBet))}
             </p>
           </div>
           <button
             type="button"
             onClick={onClose}
-            aria-label="Close paytable"
+            aria-label={t.closePaytableAria}
             className="w-10 h-10 flex items-center justify-center rounded-lg bg-[#2B1810] hover:bg-[#3F2318] text-[#FDE68A] border border-[#D4AF37]/30 transition-colors duration-150 cursor-pointer"
           >
             <X className="w-5 h-5" />
@@ -66,16 +70,16 @@ export const PaytableModal: React.FC<PaytableModalProps> = ({
               </div>
               <div>
                 <h3 className="font-display text-base sm:text-lg font-bold tracking-wide text-[#FDE68A]">
-                  Lot Progressif Noël Royale
+                  {t.jackpotBannerTitle}
                 </h3>
                 <p className="text-xs sm:text-sm text-[#E2DDD3] mt-0.5 leading-snug">
-                  Every spin contributes <strong className="text-[#FDE68A]">2%</strong> (min 0.10 €). Land <strong className="text-[#FDE047]">5× Père Noël (WILD)</strong> on an active payline to win the entire pot + 1 000× line payout! Resets to {formatEuro(PROGRESSIVE_SEED)}.
+                  {t.jackpotBannerDesc(formatEuro(PROGRESSIVE_SEED))}
                 </p>
               </div>
             </div>
             <div className="shrink-0 px-4 py-2.5 rounded-lg bg-[#0B1712] border border-[#F59E0B]/50 text-right">
               <div className="text-[10px] uppercase tracking-widest text-[#D6D0C4]">
-                Current Jackpot
+                {t.currentJackpot}
               </div>
               <div className="font-mono text-xl font-bold text-[#FDE047] tabular-nums whitespace-nowrap">
                 {formatEuro(progressiveJackpot)}
@@ -86,25 +90,25 @@ export const PaytableModal: React.FC<PaytableModalProps> = ({
           {/* Special Symbols Rules */}
           <section className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="flex items-center gap-4 p-4 rounded-lg bg-[#162920] border border-[#D4AF37]/25">
-              <SlotSymbolArt symbolId="WILD" className="w-16 h-16 shrink-0" />
+              <SlotSymbolArt symbolId="WILD" label={t.symbols.WILD} className="w-16 h-16 shrink-0" />
               <div>
                 <h3 className="font-display text-base font-bold text-[#FDE68A]">
-                  Père Noël · WILD
+                  {t.wildRuleTitle}
                 </h3>
                 <p className="text-sm text-[#E2DDD3] mt-1 leading-snug">
-                  Substitutes for all symbols except the North Star Scatter. 5× on an active payline awards the <strong className="text-[#FDE047]">Lot Progressif</strong>!
+                  {t.wildRuleDesc}
                 </p>
               </div>
             </div>
 
             <div className="flex items-center gap-4 p-4 rounded-lg bg-[#162920] border border-[#D4AF37]/25">
-              <SlotSymbolArt symbolId="SCATTER" className="w-16 h-16 shrink-0" />
+              <SlotSymbolArt symbolId="SCATTER" label={t.symbols.SCATTER} className="w-16 h-16 shrink-0" />
               <div>
                 <h3 className="font-display text-base font-bold text-[#FDE68A]">
-                  Étoile Polaire · SCATTER
+                  {t.scatterRuleTitle}
                 </h3>
                 <p className="text-sm text-[#E2DDD3] mt-1 leading-snug">
-                  3+ Scatters anywhere award 10 / 15 / 25 Free Spins with a <strong className="text-[#FDE68A]">3× multiplier</strong> on all wins.
+                  {t.scatterRuleDesc}
                 </p>
               </div>
             </div>
@@ -113,24 +117,25 @@ export const PaytableModal: React.FC<PaytableModalProps> = ({
           {/* Symbol Payouts Grid */}
           <section>
             <h3 className="font-display text-sm uppercase tracking-widest text-[#FDE68A]/90 mb-3">
-              Symbol Payouts
+              {t.symbolPayoutsHeading}
             </h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {SYMBOL_ORDER.map((id) => {
                 const sym = SYMBOLS[id];
+                const localizedName = t.symbols[id] ?? sym.name;
                 const unit = sym.isScatter ? totalBet : betPerLine;
                 return (
                   <div
                     key={id}
                     className="flex items-center gap-3.5 p-3 rounded-lg bg-[#0B1712] border border-[#D4AF37]/20"
                   >
-                    <SlotSymbolArt symbolId={id} className="w-14 h-14 shrink-0" />
+                    <SlotSymbolArt symbolId={id} label={localizedName} className="w-14 h-14 shrink-0" />
                     <div className="min-w-0 flex-1">
                       <div className="font-semibold text-sm text-[#FAF6EE] truncate">
-                        {sym.name}
+                        {localizedName}
                       </div>
                       <div className="text-xs text-[#A7B5AD] mb-1">
-                        {sym.isScatter ? 'Multiplies Total Bet' : 'Multiplies Bet / Line'}
+                        {sym.isScatter ? t.multipliesTotalBet : t.multipliesBetPerLine}
                       </div>
                       <div className="font-mono text-xs tabular-nums space-y-0.5 text-[#FDE68A]">
                         <div className="flex justify-between">
@@ -153,14 +158,14 @@ export const PaytableModal: React.FC<PaytableModalProps> = ({
             </div>
           </section>
 
-          {/* Interactive 20 Paylines Map */}
+          {/* Interactive 50 Paylines Map */}
           <section>
             <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
               <h3 className="font-display text-sm uppercase tracking-widest text-[#FDE68A]/90">
-                20 Payline Patterns (Left to Right)
+                {t.paylinesHeading}
               </h3>
               <span className="text-xs font-mono text-[#FDE68A] tabular-nums">
-                Inspecting: {inspectedLine.name} [{inspectedLine.pattern.join(',')}]
+                {t.inspectingLabel} {inspectedLine.name} [{inspectedLine.pattern.join(',')}]
               </span>
             </div>
 
@@ -191,7 +196,7 @@ export const PaytableModal: React.FC<PaytableModalProps> = ({
                 )}
               </div>
 
-              {/* 20 selectable line buttons */}
+              {/* 50 selectable line buttons */}
               <div className="grid grid-cols-5 sm:grid-cols-10 gap-1.5">
                 {PAYLINES.map((line) => {
                   const isSelected = line.id === inspectedLine.id;
@@ -208,7 +213,7 @@ export const PaytableModal: React.FC<PaytableModalProps> = ({
                             ? 'bg-[#162920] text-[#FAF6EE] border-[#D4AF37]/30 hover:border-[#FDE68A]'
                             : 'bg-[#09120E] text-[#64748B] border-white/10'
                       }`}
-                      aria-label={`Inspect ${line.name}`}
+                      aria-label={`${t.inspectingLabel} ${line.name}`}
                     >
                       {line.id}
                     </button>

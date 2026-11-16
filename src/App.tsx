@@ -5,9 +5,11 @@ import {
   LogIn,
   LogOut,
   Minus,
+  Music,
   Pause,
   Plus,
   Repeat,
+  SlidersHorizontal,
   Square,
   Trophy,
   Volume2,
@@ -15,8 +17,10 @@ import {
   Zap,
 } from 'lucide-react';
 import { CloudLedgerModal } from './components/CloudLedgerModal';
+import { LanguageSelector } from './components/LanguageSelector';
 import { PaylineOverlay } from './components/PaylineOverlay';
 import { PaytableModal } from './components/PaytableModal';
+import { SettingsModal } from './components/SettingsModal';
 import { SlotSymbolArt } from './components/SlotSymbolArt';
 import { SnowCanvas } from './components/SnowCanvas';
 import { StatusModal } from './components/StatusModal';
@@ -37,8 +41,8 @@ import {
   BET_PER_LINE_OPTIONS,
   formatEuro,
   PAYLINES,
+  PROGRESSIVE_SEED,
   SHOWCASE_GRID,
-  SYMBOLS,
 } from './game/constants';
 import {
   canAffordSpin,
@@ -48,10 +52,34 @@ import {
   roundCurrency,
   spinReels,
 } from './game/engine';
-import { GameState, Grid, SlotMachineState, SpinResult } from './game/types';
+import {
+  getTranslation,
+  LANGUAGE_STORAGE_KEY,
+  LanguageCode,
+  resolveLanguage,
+} from './game/i18n';
+import {
+  GameState,
+  Grid,
+  SlotMachineState,
+  SpinResult,
+  VolatilityMode,
+} from './game/types';
 
-const LEFT_PIN_IDS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
-const RIGHT_PIN_IDS = [11, 12, 13, 14, 15, 16, 17, 18, 19, 20];
+const LEFT_PIN_IDS = Array.from({ length: 25 }, (_, i) => i + 1);
+const RIGHT_PIN_IDS = Array.from({ length: 25 }, (_, i) => i + 26);
+const VOLATILITY_STORAGE_KEY = 'noel_royale_volatility';
+
+function getInitialVolatility(): VolatilityMode {
+  if (typeof window !== 'undefined') {
+    try {
+      window.localStorage.setItem(VOLATILITY_STORAGE_KEY, 'rare');
+    } catch {
+      // Ignore storage access restrictions
+    }
+  }
+  return 'rare';
+}
 
 function getInitialGameState(): GameState {
   if (typeof window !== 'undefined') {
@@ -63,9 +91,37 @@ function getInitialGameState(): GameState {
   return 'title';
 }
 
+function getInitialLanguage(): LanguageCode {
+  if (typeof window !== 'undefined') {
+    try {
+      const stored = window.localStorage.getItem(LANGUAGE_STORAGE_KEY);
+      if (stored) {
+        return resolveLanguage(stored);
+      }
+    } catch {
+      // Ignore storage access restrictions
+    }
+    return resolveLanguage(window.navigator.language);
+  }
+  return 'en';
+}
+
+type StatusKind =
+  | 'ready'
+  | 'reset'
+  | 'volatility'
+  | 'signedOut'
+  | 'signInCancelled'
+  | 'result'
+  | 'other';
+
 export default function App() {
   const [gameState, setGameState] = useState<GameState>(getInitialGameState);
-  const [slotState, setSlotState] = useState<SlotMachineState>(createInitialSlotState);
+  const [language, setLanguage] = useState<LanguageCode>(getInitialLanguage);
+  const [volatility, setVolatility] = useState<VolatilityMode>(getInitialVolatility);
+  const [slotState, setSlotState] = useState<SlotMachineState>(() =>
+    createInitialSlotState(PROGRESSIVE_SEED, getInitialVolatility()),
+  );
   const [displayGrid, setDisplayGrid] = useState<Grid>(SHOWCASE_GRID);
   const [spinningReels, setSpinningReels] = useState<[boolean, boolean, boolean, boolean, boolean]>([
     false,
@@ -86,20 +142,26 @@ export default function App() {
 
   const [paytableOpen, setPaytableOpen] = useState(false);
   const [ledgerOpen, setLedgerOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [user, setUser] = useState<User | null>(null);
   const [authReady, setAuthReady] = useState(false);
   const [authBusy, setAuthBusy] = useState(false);
   const [recentSpins, setRecentSpins] = useState<CloudSpinEntry[]>([]);
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [isMuted, setIsMuted] = useState(false);
+  const [isMusicOn, setIsMusicOn] = useState(true);
+  const [currentMusicThemeId, setCurrentMusicThemeId] = useState(() => slotAudio.getCurrentTheme().id);
+  const [autoAlternateMusic, setAutoAlternateMusic] = useState(() => slotAudio.isAutoAlternate());
   const [isTurbo, setIsTurbo] = useState(false);
   const [isAutoSpin, setIsAutoSpin] = useState(false);
-  const [previewLineId, setPreviewLineId] = useState<number | null>(null);
+  const [hoveredLineId, setHoveredLineId] = useState<number | null>(null);
+  const [pinnedLineId, setPinnedLineId] = useState<number | null>(null);
+  const previewLineId = hoveredLineId ?? pinnedLineId;
   const [activeWinCycleIdx, setActiveWinCycleIdx] = useState(0);
   const [burstCounter, setBurstCounter] = useState(0);
   const [isBigBurst, setIsBigBurst] = useState(false);
-  const [statusMessage, setStatusMessage] = useState(
-    'Cabinet ready · Match 3+ symbols left to right on 20 paylines',
+  const [statusMessage, setStatusMessage] = useState(() =>
+    getTranslation(getInitialLanguage()).cabinetReady,
   );
 
   const timersRef = useRef<number[]>([]);
@@ -111,6 +173,14 @@ export default function App() {
   } | null>(null);
   const slotStateRef = useRef(slotState);
   slotStateRef.current = slotState;
+
+  const languageRef = useRef<LanguageCode>(language);
+  languageRef.current = language;
+
+  const statusKindRef = useRef<StatusKind>('ready');
+
+  const volatilityRef = useRef(volatility);
+  volatilityRef.current = volatility;
 
   const userRef = useRef<User | null>(user);
   userRef.current = user;
@@ -136,13 +206,24 @@ export default function App() {
     }
   }, []);
 
-  // Sync game state to body[data-state]
+  // Sync game state to body[data-state] and language to html[lang]
   useEffect(() => {
     document.body.dataset.state = gameState;
   }, [gameState]);
 
+  useEffect(() => {
+    document.documentElement.lang = language;
+  }, [language]);
+
   // Clear timers on unmount
   useEffect(() => clearAllTimers, [clearAllTimers]);
+
+  // Sync active Christmas music theme when library alternates automatically
+  useEffect(() => {
+    return slotAudio.subscribeTheme((theme) => {
+      setCurrentMusicThemeId(theme.id);
+    });
+  }, []);
 
   // Listen to Firebase Auth state & hydrate player's Firestore bankroll
   useEffect(() => {
@@ -152,14 +233,18 @@ export default function App() {
       if (nextUser) {
         try {
           const loaded = await loadOrCreatePlayerState(nextUser);
-          setSlotState(loaded);
+          setSlotState({ ...loaded, volatility: volatilityRef.current });
+          statusKindRef.current = 'other';
           setStatusMessage(
-            `Cloud ledger synced · Welcome back, ${nextUser.displayName?.split(' ')[0] || 'Player'}`,
+            getTranslation(languageRef.current).cloudSyncedStatus(
+              nextUser.displayName?.split(' ')[0] || 'Player',
+            ),
           );
         } catch (err) {
           const msg = err instanceof Error ? err.message : '';
           if (msg.includes('Quota exceeded')) {
-            setStatusMessage('Firestore daily quota exceeded — playing in local session mode.');
+            statusKindRef.current = 'other';
+            setStatusMessage(getTranslation(languageRef.current).quotaLocalStatus);
           }
         }
       } else {
@@ -220,7 +305,8 @@ export default function App() {
       await signInWithGoogle();
     } catch (err) {
       console.error('Google sign-in failed:', err);
-      setStatusMessage('Sign-in cancelled or blocked — continuing in local session.');
+      statusKindRef.current = 'signInCancelled';
+      setStatusMessage(getTranslation(languageRef.current).signInCancelledStatus);
     } finally {
       setAuthBusy(false);
     }
@@ -231,7 +317,8 @@ export default function App() {
     setAuthBusy(true);
     try {
       await signOutUser();
-      setStatusMessage('Signed out — playing in local session mode.');
+      statusKindRef.current = 'signedOut';
+      setStatusMessage(getTranslation(languageRef.current).signedOutStatus);
     } catch (err) {
       console.error('Sign-out failed:', err);
     } finally {
@@ -243,7 +330,7 @@ export default function App() {
   useEffect(() => {
     if (!isSpinning) return;
     const interval = window.setInterval(() => {
-      setReelBlurGrid(spinReels());
+      setReelBlurGrid(spinReels(Math.random, volatilityRef.current));
     }, 85);
     return () => window.clearInterval(interval);
   }, [isSpinning]);
@@ -268,27 +355,41 @@ export default function App() {
     };
   }, [slotState.lastResult, isSpinning]);
 
-  const formatResultSummary = useCallback((result: SpinResult): string => {
+  const formatResultSummary = useCallback((result: SpinResult, lang?: LanguageCode): string => {
+    const dict = getTranslation(lang ?? languageRef.current);
     if (result.jackpotWon > 0) {
-      return `LOT PROGRESSIF REMPORTÉ ! 5× Père Noël (WILD) · +${formatEuro(result.totalWin)} !`;
+      return dict.jackpotWonSummary(formatEuro(result.totalWin));
     }
     if (result.freeSpinsAwarded > 0) {
-      return `North Star Bonus! ${result.scatterCount}× Scatters awarded ${result.freeSpinsAwarded} Free Spins (3× Multiplier) · +${formatEuro(result.totalWin)}`;
+      return dict.freeSpinsWonSummary(
+        result.scatterCount,
+        result.freeSpinsAwarded,
+        formatEuro(result.totalWin),
+      );
     }
     if (result.winningLines.length === 1) {
       const w = result.winningLines[0];
-      const symName = SYMBOLS[w.symbolId].name;
-      const multNote = w.appliedMultiplier > 1 ? ` · ${w.appliedMultiplier}× Free Spin` : '';
-      return `${w.lineName}: ${w.matchCount}× ${symName}${w.usedWild ? ' (with Wild)' : ''}${multNote} · +${formatEuro(result.totalWin)}`;
+      const symName = dict.symbols[w.symbolId] ?? w.symbolId;
+      return dict.singleLineWinSummary(
+        w.lineName,
+        w.matchCount,
+        symName,
+        w.usedWild,
+        w.appliedMultiplier,
+        formatEuro(result.totalWin),
+      );
     }
     if (result.winningLines.length > 1) {
-      const multNote = result.multiplierApplied > 1 ? ` (${result.multiplierApplied}× Free Spin)` : '';
-      return `${result.winningLines.length} Winning Paylines${multNote} · Total Win +${formatEuro(result.totalWin)}`;
+      return dict.multiLineWinSummary(
+        result.winningLines.length,
+        result.multiplierApplied,
+        formatEuro(result.totalWin),
+      );
     }
     if (result.scatterCount === 2) {
-      return '2× North Stars landed — 1 more triggers 3× Free Spins!';
+      return dict.twoScattersHint;
     }
-    return 'No winning line this spin — spin again!';
+    return dict.noWinStatus;
   }, []);
 
   const triggerSpinRef = useRef<(overrideState?: SlotMachineState) => void>(() => {});
@@ -310,13 +411,15 @@ export default function App() {
       const summaryText = formatResultSummary(result);
       setSlotState(nextState);
       setIsSpinning(false);
+      statusKindRef.current = 'result';
       setStatusMessage(summaryText);
 
       if (userRef.current) {
         void saveSpinOutcome(userRef.current, nextState, result, summaryText).catch((err) => {
           const msg = err instanceof Error ? err.message : '';
           if (msg.includes('Quota exceeded')) {
-            setStatusMessage('Firestore daily quota exceeded — spin kept locally.');
+            statusKindRef.current = 'other';
+            setStatusMessage(getTranslation(languageRef.current).quotaSpinLocalStatus);
           }
         });
       }
@@ -376,19 +479,26 @@ export default function App() {
         if (isGameOver(current)) {
           setGameState('gameover');
         } else {
-          setStatusMessage('Insufficient balance for current bet — lower bet/lines or reset bankroll.');
+          statusKindRef.current = 'other';
+          setStatusMessage(getTranslation(languageRef.current).insufficientBalance);
         }
         return;
       }
 
       clearAllTimers();
-      setPreviewLineId(null);
+      setHoveredLineId(null);
+      setPinnedLineId(null);
       setActiveWinCycleIdx(0);
       setIsSpinning(true);
       setSpinningReels([true, true, true, true, true]);
       setSettledReels([false, false, false, false, false]);
 
-      const { nextState, result } = executeSpin(current);
+      const { nextState, result } = executeSpin(
+        current,
+        undefined,
+        Math.random,
+        volatilityRef.current,
+      );
       const pending = { current, nextState, result };
       pendingSpinRef.current = pending;
 
@@ -405,10 +515,12 @@ export default function App() {
         lastResult: null,
       });
 
+      const dict = getTranslation(languageRef.current);
+      statusKindRef.current = 'other';
       setStatusMessage(
         isFree
-          ? `Free Spin active (3× Multiplier) · ${Math.max(0, current.freeSpinsRemaining - 1)} remaining...`
-          : `Spinning 5 reels · Bet ${formatEuro(wagerThisSpin)}...`,
+          ? dict.spinningFreeStatus(Math.max(0, current.freeSpinsRemaining - 1))
+          : dict.spinningReelsStatus(formatEuro(wagerThisSpin)),
       );
       slotAudio.playSpinStart();
 
@@ -464,6 +576,7 @@ export default function App() {
 
   const handleStartGame = useCallback(() => {
     slotAudio.playClick();
+    slotAudio.startMusicIfEnabled();
     if (document.activeElement instanceof HTMLElement) {
       document.activeElement.blur();
     }
@@ -478,12 +591,13 @@ export default function App() {
     setSpinningReels([false, false, false, false, false]);
     setIsAutoSpin(false);
     const fresh: SlotMachineState = {
-      ...createInitialSlotState(slotStateRef.current.progressiveJackpot),
+      ...createInitialSlotState(slotStateRef.current.progressiveJackpot, volatilityRef.current),
       stats: slotStateRef.current.stats,
     };
     setSlotState(fresh);
     setDisplayGrid(SHOWCASE_GRID);
-    setStatusMessage('Bankroll reset to 2 500.00 € · Ready to spin');
+    statusKindRef.current = 'reset';
+    setStatusMessage(getTranslation(languageRef.current).bankrollResetStatus);
     setGameState('playing');
     if (userRef.current) {
       void saveProfileState(userRef.current, fresh).catch(() => {});
@@ -495,14 +609,15 @@ export default function App() {
     slotAudio.playClick();
     const maxState: SlotMachineState = {
       ...slotState,
-      activeLines: 20,
+      activeLines: PAYLINES.length,
       betPerLine: 25.0,
     };
     setSlotState(maxState);
     if (canAffordSpin(maxState)) {
       triggerSpin(maxState);
     } else {
-      setStatusMessage('Balance below 500.00 € Max Bet — lower bet/line to spin.');
+      statusKindRef.current = 'other';
+      setStatusMessage(getTranslation(languageRef.current).balanceBelowMaxBet);
     }
   }, [isSpinning, slotState, triggerSpin]);
 
@@ -512,7 +627,7 @@ export default function App() {
     setSlotState((prev) => {
       const next = {
         ...prev,
-        activeLines: Math.max(1, Math.min(20, prev.activeLines + delta)),
+        activeLines: Math.max(1, Math.min(PAYLINES.length, prev.activeLines + delta)),
       };
       if (userRef.current) {
         void saveProfileState(userRef.current, next).catch(() => {});
@@ -552,16 +667,95 @@ export default function App() {
     });
   }, []);
 
+  const toggleMusic = useCallback(() => {
+    setIsMusicOn((prev) => {
+      const next = !prev;
+      slotAudio.setMusicEnabled(next);
+      return next;
+    });
+  }, []);
+
+  const handleSelectMusicTheme = useCallback((themeId: string) => {
+    slotAudio.playClick();
+    slotAudio.selectTheme(themeId);
+    setCurrentMusicThemeId(slotAudio.getCurrentTheme().id);
+  }, []);
+
+  const handleNextMusicTheme = useCallback(() => {
+    slotAudio.playClick();
+    slotAudio.nextTheme();
+    setCurrentMusicThemeId(slotAudio.getCurrentTheme().id);
+  }, []);
+
+  const handleToggleAutoAlternateMusic = useCallback(() => {
+    slotAudio.playClick();
+    setAutoAlternateMusic((prev) => {
+      const next = !prev;
+      slotAudio.setAutoAlternate(next);
+      return next;
+    });
+  }, []);
+
+  const handleChangeVolatility = useCallback((mode: VolatilityMode) => {
+    slotAudio.playClick();
+    setVolatility(mode);
+    volatilityRef.current = mode;
+    setSlotState((prev) => ({ ...prev, volatility: mode }));
+    if (typeof window !== 'undefined') {
+      try {
+        window.localStorage.setItem(VOLATILITY_STORAGE_KEY, mode);
+      } catch {
+        // Ignore storage errors
+      }
+    }
+    statusKindRef.current = 'volatility';
+    setStatusMessage(getTranslation(languageRef.current).volatilityStatus);
+  }, []);
+
+  const handleChangeLanguage = useCallback(
+    (nextLang: LanguageCode) => {
+      slotAudio.playClick();
+      setLanguage(nextLang);
+      languageRef.current = nextLang;
+      if (typeof window !== 'undefined') {
+        try {
+          window.localStorage.setItem(LANGUAGE_STORAGE_KEY, nextLang);
+        } catch {
+          // Ignore storage errors
+        }
+      }
+      if (!isSpinningRef.current) {
+        const nextDict = getTranslation(nextLang);
+        const kind = statusKindRef.current;
+        if (kind === 'result' && slotStateRef.current.lastResult) {
+          setStatusMessage(formatResultSummary(slotStateRef.current.lastResult, nextLang));
+        } else if (kind === 'reset') {
+          setStatusMessage(nextDict.bankrollResetStatus);
+        } else if (kind === 'volatility') {
+          setStatusMessage(nextDict.volatilityStatus);
+        } else if (kind === 'signedOut') {
+          setStatusMessage(nextDict.signedOutStatus);
+        } else if (kind === 'signInCancelled') {
+          setStatusMessage(nextDict.signInCancelledStatus);
+        } else if (kind === 'ready') {
+          setStatusMessage(nextDict.cabinetReady);
+        }
+      }
+    },
+    [formatResultSummary],
+  );
+
   // Global Keyboard Shortcuts
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.repeat) return;
 
-      if (paytableOpen || ledgerOpen) {
+      if (paytableOpen || ledgerOpen || settingsOpen) {
         if (e.key === 'Escape') {
           e.preventDefault();
           setPaytableOpen(false);
           setLedgerOpen(false);
+          setSettingsOpen(false);
         } else if (paytableOpen && e.key.toLowerCase() === 'p') {
           e.preventDefault();
           setPaytableOpen(false);
@@ -626,6 +820,7 @@ export default function App() {
     gameState,
     paytableOpen,
     ledgerOpen,
+    settingsOpen,
     handleStartGame,
     handleResetBankroll,
     handleStopReels,
@@ -634,6 +829,7 @@ export default function App() {
     handleBetMax,
   ]);
 
+  const t = getTranslation(language);
   const totalBet = roundCurrency(slotState.activeLines * slotState.betPerLine);
   const lastWin = slotState.lastResult?.totalWin ?? 0;
   const winningLines = slotState.lastResult?.winningLines ?? [];
@@ -654,11 +850,19 @@ export default function App() {
       <SnowCanvas
         burstKey={burstCounter}
         isBigBurst={isBigBurst}
-        paused={paytableOpen || ledgerOpen || gameState === 'paused' || gameState === 'gameover'}
+        paused={
+          paytableOpen ||
+          ledgerOpen ||
+          settingsOpen ||
+          gameState === 'paused' ||
+          gameState === 'gameover'
+        }
       />
 
       {gameState === 'title' ? (
         <TitleScreen
+          language={language}
+          onChangeLanguage={handleChangeLanguage}
           onStart={handleStartGame}
           onOpenPaytable={() => {
             slotAudio.playClick();
@@ -670,9 +874,9 @@ export default function App() {
           onSignOut={() => void handleSignOut()}
         />
       ) : (
-        <div className="relative z-10 flex-1 flex flex-col justify-between max-w-6xl w-full mx-auto px-3 sm:px-6 py-3 sm:py-4 gap-3">
+        <div className="relative z-10 flex-1 flex flex-col justify-between max-w-6xl w-full mx-auto px-3 sm:px-6 py-3 sm:py-4 gap-2.5 sm:gap-3">
           {/* Perimeter Top HUD */}
-          <header className="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5 rounded-xl bg-[#19110C]/95 border border-[#D4AF37]/40 shadow-lg">
+          <header className="flex flex-wrap items-center justify-between gap-3 px-3 sm:px-4 py-2.5 rounded-xl bg-[#19110C]/95 border border-[#D4AF37]/40 shadow-lg">
             {/* Cabinet Wordmark */}
             <div className="flex items-center gap-3 shrink-0">
               <svg viewBox="0 0 28 28" className="w-7 h-7" aria-hidden="true">
@@ -688,63 +892,23 @@ export default function App() {
               </span>
             </div>
 
-            {/* Key Perimeter Telemetry Readouts */}
-            <div className="flex flex-wrap items-center gap-4 sm:gap-6">
-              <div>
-                <div className="text-[10px] uppercase tracking-widest text-[#A7B5AD]">
-                  Balance
-                </div>
-                <div
-                  data-testid="balance-readout"
-                  className="font-mono text-base sm:text-xl font-bold text-[#FAF6EE] tabular-nums whitespace-nowrap"
+            {/* Free Spins Badge (when active) */}
+            {slotState.freeSpinsRemaining > 0 && (
+              <div className="px-3 py-1 rounded-md bg-[#B91C1C] border border-[#FDE68A]/70 flex items-center gap-2">
+                <span className="text-[10px] uppercase tracking-widest text-[#FEF3C7]">
+                  {t.freeSpinsBadge}
+                </span>
+                <span
+                  data-testid="freespins-readout"
+                  className="font-mono text-base font-bold text-white tabular-nums"
                 >
-                  {formatEuro(slotState.balance)}
-                </div>
+                  {slotState.freeSpinsRemaining}
+                </span>
               </div>
-
-              <div>
-                <div className="text-[10px] uppercase tracking-widest text-[#A7B5AD]">
-                  Last Win
-                </div>
-                <div
-                  data-testid="win-readout"
-                  className={`font-mono text-base sm:text-xl font-bold tabular-nums whitespace-nowrap ${
-                    lastWin > 0 ? 'text-[#FDE047]' : 'text-[#CBD5E1]'
-                  }`}
-                >
-                  {formatEuro(lastWin)}
-                </div>
-              </div>
-
-              <div className="px-3 py-1 rounded-lg bg-[#2B1810] border border-[#F59E0B]/60">
-                <div className="text-[10px] uppercase tracking-widest text-[#FDE68A]">
-                  Lot Progressif
-                </div>
-                <div
-                  data-testid="jackpot-readout"
-                  className="font-mono text-base sm:text-xl font-bold text-[#FDE047] tabular-nums whitespace-nowrap"
-                >
-                  {formatEuro(slotState.progressiveJackpot)}
-                </div>
-              </div>
-
-              {slotState.freeSpinsRemaining > 0 && (
-                <div className="px-3 py-1 rounded-md bg-[#B91C1C] border border-[#FDE68A]/70">
-                  <div className="text-[10px] uppercase tracking-widest text-[#FEF3C7]">
-                    Free Spins · 3×
-                  </div>
-                  <div
-                    data-testid="freespins-readout"
-                    className="font-mono text-base font-bold text-white tabular-nums text-center"
-                  >
-                    {slotState.freeSpinsRemaining}
-                  </div>
-                </div>
-              )}
-            </div>
+            )}
 
             {/* Utility Controls */}
-            <div className="flex items-center gap-2 shrink-0">
+            <div className="flex flex-wrap items-center justify-end gap-1 sm:gap-2">
               <button
                 type="button"
                 tabIndex={-1}
@@ -753,12 +917,12 @@ export default function App() {
                   slotAudio.playClick();
                   setLedgerOpen(true);
                 }}
-                aria-label="Open ledger and leaderboard"
-                title="Ledger & Hall of Fame"
-                className="h-10 px-3 rounded-lg bg-[#2B1810] hover:bg-[#3F2318] text-[#FDE68A] border border-[#D4AF37]/35 flex items-center gap-1.5 text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap"
+                aria-label={t.ledgerTitle}
+                title={t.ledgerTitle}
+                className="h-9 sm:h-10 w-8 sm:w-auto sm:min-w-[40px] px-0 sm:px-3 rounded-lg bg-[#2B1810] hover:bg-[#3F2318] text-[#FDE68A] border border-[#D4AF37]/35 flex items-center justify-center gap-1.5 text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap"
               >
                 <Trophy className="w-4 h-4" />
-                <span className="hidden sm:inline">Ledger</span>
+                <span className="hidden sm:inline">{t.ledger}</span>
               </button>
 
               {user ? (
@@ -770,13 +934,13 @@ export default function App() {
                     e.currentTarget.blur();
                     void handleSignOut();
                   }}
-                  aria-label="Sign out"
-                  title={`Signed in as ${user.displayName || user.email || 'Player'}`}
-                  className="h-10 px-3 rounded-lg bg-[#101F18] hover:bg-[#19352A] disabled:opacity-50 text-[#E2DDD3] border border-[#D4AF37]/35 flex items-center gap-1.5 text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap"
+                  aria-label={t.signOut}
+                  title={user.displayName || user.email || t.signOut}
+                  className="h-9 sm:h-10 w-8 sm:w-auto sm:min-w-[40px] px-0 sm:px-3 rounded-lg bg-[#101F18] hover:bg-[#19352A] disabled:opacity-50 text-[#E2DDD3] border border-[#D4AF37]/35 flex items-center justify-center gap-1.5 text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap"
                 >
                   <LogOut className="w-4 h-4" />
                   <span className="hidden md:inline">
-                    {user.displayName ? user.displayName.split(' ')[0] : 'Sign out'}
+                    {user.displayName ? user.displayName.split(' ')[0] : t.signOut}
                   </span>
                 </button>
               ) : (
@@ -788,13 +952,13 @@ export default function App() {
                     e.currentTarget.blur();
                     void handleSignIn();
                   }}
-                  aria-label="Sign in with Google"
-                  title="Sign in to save bankroll"
-                  className="h-10 px-3 rounded-lg bg-[#B91C1C] hover:bg-[#991B1B] disabled:opacity-50 text-[#FAF6EE] border border-[#FDE68A]/50 flex items-center gap-1.5 text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap"
+                  aria-label={t.signInWithGoogle}
+                  title={t.signInToSave}
+                  className="h-9 sm:h-10 w-8 sm:w-auto sm:min-w-[40px] px-0 sm:px-3 rounded-lg bg-[#B91C1C] hover:bg-[#991B1B] disabled:opacity-50 text-[#FAF6EE] border border-[#FDE68A]/50 flex items-center justify-center gap-1.5 text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap"
                 >
                   <LogIn className="w-4 h-4" />
                   <span className="hidden md:inline">
-                    {authBusy ? 'Signing in...' : 'Sign in'}
+                    {authBusy ? t.signingIn : t.signIn}
                   </span>
                 </button>
               )}
@@ -807,27 +971,82 @@ export default function App() {
                   slotAudio.playClick();
                   setPaytableOpen(true);
                 }}
-                aria-label="Open paytable"
-                title="Paytable [P]"
-                className="h-10 px-3 rounded-lg bg-[#2B1810] hover:bg-[#3F2318] text-[#FDE68A] border border-[#D4AF37]/35 flex items-center gap-1.5 text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap"
+                aria-label={t.paytable}
+                title={`${t.paytable} [P]`}
+                className="h-9 sm:h-10 w-8 sm:w-auto sm:min-w-[40px] px-0 sm:px-3 rounded-lg bg-[#2B1810] hover:bg-[#3F2318] text-[#FDE68A] border border-[#D4AF37]/35 flex items-center justify-center gap-1.5 text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap"
               >
                 <BookOpen className="w-4 h-4" />
-                <span className="hidden sm:inline">Paytable</span>
+                <span className="hidden sm:inline">{t.paytable}</span>
               </button>
 
               <button
                 type="button"
                 tabIndex={-1}
+                data-testid="music-toggle-button"
+                aria-pressed={isMusicOn}
+                onClick={(e) => {
+                  e.currentTarget.blur();
+                  toggleMusic();
+                }}
+                aria-label={`${t.music} ${isMusicOn ? 'ON' : 'OFF'}`}
+                title={
+                  isMusicOn
+                    ? `${t.music} ON · ${slotAudio.getThemes().find((th) => th.id === currentMusicThemeId)?.title ?? 'Noël'}`
+                    : `${t.music} OFF`
+                }
+                className={`h-9 sm:h-10 w-8 sm:w-auto sm:min-w-[40px] px-0 lg:px-3 rounded-lg border flex items-center justify-center gap-1.5 text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap ${
+                  isMusicOn
+                    ? 'bg-[#19352A] hover:bg-[#224739] text-[#FDE047] border-[#F59E0B]/60'
+                    : 'bg-[#1A120D] hover:bg-[#2B1810] text-[#78716C] border-[#D4AF37]/25'
+                }`}
+              >
+                <Music className="w-4 h-4" />
+                <span className="hidden lg:inline">{t.music}</span>
+              </button>
+
+              <button
+                type="button"
+                tabIndex={-1}
+                data-testid="sfx-toggle-button"
+                aria-pressed={!isMuted}
                 onClick={(e) => {
                   e.currentTarget.blur();
                   toggleMute();
                 }}
-                aria-label={isMuted ? 'Unmute audio' : 'Mute audio'}
-                title="Mute [M]"
-                className="w-10 h-10 rounded-lg bg-[#2B1810] hover:bg-[#3F2318] text-[#FDE68A] border border-[#D4AF37]/35 flex items-center justify-center transition-colors cursor-pointer"
+                aria-label={`${t.sfx} ${isMuted ? 'OFF' : 'ON'}`}
+                title={`${t.sfx} ${isMuted ? 'OFF' : 'ON'} [M]`}
+                className={`h-9 sm:h-10 w-8 sm:w-auto sm:min-w-[40px] px-0 lg:px-3 rounded-lg border flex items-center justify-center gap-1.5 text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap ${
+                  !isMuted
+                    ? 'bg-[#2B1810] hover:bg-[#3F2318] text-[#FDE68A] border-[#D4AF37]/35'
+                    : 'bg-[#1A120D] hover:bg-[#2B1810] text-[#78716C] border-[#D4AF37]/25'
+                }`}
               >
                 {isMuted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
+                <span className="hidden lg:inline">{t.sfx}</span>
               </button>
+
+              <button
+                type="button"
+                tabIndex={-1}
+                data-testid="settings-button"
+                onClick={(e) => {
+                  e.currentTarget.blur();
+                  slotAudio.playClick();
+                  setSettingsOpen(true);
+                }}
+                aria-label={t.settings}
+                title={t.settingsTitle}
+                className="h-9 sm:h-10 w-8 sm:w-auto sm:min-w-[40px] px-0 lg:px-3 rounded-lg border flex items-center justify-center gap-1.5 text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap bg-[#2B1810] hover:bg-[#3F2318] text-[#FDE68A] border-[#D4AF37]/35"
+              >
+                <SlidersHorizontal className="w-4 h-4" />
+                <span className="hidden lg:inline">{t.settings}</span>
+              </button>
+
+              <LanguageSelector
+                language={language}
+                onChangeLanguage={handleChangeLanguage}
+                variant="header"
+              />
 
               <button
                 type="button"
@@ -837,14 +1056,83 @@ export default function App() {
                   setIsAutoSpin(false);
                   setGameState('paused');
                 }}
-                aria-label="Pause game"
-                title="Pause [Esc]"
-                className="w-10 h-10 rounded-lg bg-[#2B1810] hover:bg-[#3F2318] text-[#FDE68A] border border-[#D4AF37]/35 flex items-center justify-center transition-colors cursor-pointer"
+                aria-label={t.pause}
+                title={`${t.pause} [Esc]`}
+                className="w-8 h-9 sm:w-10 sm:h-10 rounded-lg bg-[#2B1810] hover:bg-[#3F2318] text-[#FDE68A] border border-[#D4AF37]/35 flex items-center justify-center transition-colors cursor-pointer"
               >
                 <Pause className="w-4 h-4" />
               </button>
             </div>
           </header>
+
+          {/* Pinned Telemetry Bar: Balance (Left) · Lot Progressif (Center) · Last Win (Right) */}
+          <div
+            data-testid="telemetry-row"
+            className="sticky top-2 z-20 grid grid-cols-2 sm:grid-cols-[1fr_minmax(320px,1.4fr)_1fr] gap-2 sm:gap-3 items-stretch"
+          >
+            {/* Balance Box (Left) */}
+            <section
+              aria-label={t.balance}
+              data-testid="balance-box"
+              className="order-1 px-3.5 sm:px-4 py-2 rounded-xl bg-[#19110C]/95 border border-[#D4AF37]/45 shadow-lg backdrop-blur-sm flex flex-col justify-center"
+            >
+              <div className="text-[10px] uppercase tracking-widest text-[#A7B5AD]">
+                {t.balance}
+              </div>
+              <div
+                data-testid="balance-readout"
+                className="font-mono text-base sm:text-xl font-bold text-[#FAF6EE] tabular-nums whitespace-nowrap"
+              >
+                {formatEuro(slotState.balance)}
+              </div>
+            </section>
+
+            {/* Standalone Lot Progressif Box (Center) */}
+            <section
+              aria-label={t.progressiveJackpot}
+              data-testid="jackpot-box"
+              className="order-3 col-span-2 sm:order-2 sm:col-span-1 px-4 sm:px-5 py-2 rounded-xl bg-gradient-to-r from-[#19110C]/95 via-[#2B1810]/95 to-[#19110C]/95 border border-[#F59E0B]/70 shadow-[0_8px_24px_rgba(0,0,0,0.55)] backdrop-blur-sm flex items-center justify-between gap-3"
+            >
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="w-8 h-8 rounded-lg bg-[#19110C] border border-[#FDE68A]/45 flex items-center justify-center shrink-0 text-[#FDE047]">
+                  <Trophy className="w-4 h-4" />
+                </div>
+                <div className="min-w-0">
+                  <div className="font-display text-xs sm:text-sm font-bold uppercase tracking-widest text-[#FDE68A] truncate">
+                    {t.progressiveJackpot}
+                  </div>
+                  <div className="text-[11px] text-[#D6D0C4] truncate hidden lg:block">
+                    {t.jackpotSubtitle}
+                  </div>
+                </div>
+              </div>
+              <div
+                data-testid="jackpot-readout"
+                className="font-mono text-xl sm:text-2xl font-bold text-[#FDE047] tabular-nums whitespace-nowrap shrink-0"
+              >
+                {formatEuro(slotState.progressiveJackpot)}
+              </div>
+            </section>
+
+            {/* Last Win Box (Right) */}
+            <section
+              aria-label={t.lastWin}
+              data-testid="last-win-box"
+              className="order-2 sm:order-3 px-3.5 sm:px-4 py-2 rounded-xl bg-[#19110C]/95 border border-[#D4AF37]/45 shadow-lg backdrop-blur-sm flex flex-col justify-center items-end"
+            >
+              <div className="text-[10px] uppercase tracking-widest text-[#A7B5AD]">
+                {t.lastWin}
+              </div>
+              <div
+                data-testid="win-readout"
+                className={`font-mono text-base sm:text-xl font-bold tabular-nums whitespace-nowrap ${
+                  lastWin > 0 ? 'text-[#FDE047]' : 'text-[#CBD5E1]'
+                }`}
+              >
+                {formatEuro(lastWin)}
+              </div>
+            </section>
+          </div>
 
           {/* Centerpiece: 5x3 Mahogany & Brass Reel Cabinet */}
           <main className="flex-1 flex flex-col justify-center gap-2.5 min-h-0">
@@ -857,10 +1145,10 @@ export default function App() {
             >
               {/* Inner Cabinet Brass Rim */}
               <div className="flex items-stretch gap-1.5 sm:gap-2.5">
-                {/* Left Payline Pins (1–10) */}
+                {/* Left Payline Pins (1–25) */}
                 <div
-                  className="hidden md:flex flex-col justify-between py-1 shrink-0"
-                  aria-label="Paylines 1 to 10"
+                  className="hidden md:grid grid-cols-2 gap-1 py-0.5 content-between shrink-0"
+                  aria-label="Paylines 1 to 25"
                 >
                   {LEFT_PIN_IDS.map((id) => {
                     const line = PAYLINES[id - 1];
@@ -872,13 +1160,13 @@ export default function App() {
                         key={id}
                         type="button"
                         tabIndex={-1}
-                        onMouseEnter={() => setPreviewLineId(id)}
-                        onMouseLeave={() => setPreviewLineId(null)}
+                        onMouseEnter={() => setHoveredLineId(id)}
+                        onMouseLeave={() => setHoveredLineId((curr) => (curr === id ? null : curr))}
                         onClick={() =>
-                          setPreviewLineId((curr) => (curr === id ? null : id))
+                          setPinnedLineId((curr) => (curr === id ? null : id))
                         }
                         aria-label={`Preview ${line.name}`}
-                        className={`w-7 h-6 rounded text-[11px] font-mono font-bold tabular-nums transition-transform cursor-pointer border ${
+                        className={`w-6 h-[22px] rounded text-[10px] font-mono font-bold tabular-nums transition-transform cursor-pointer border ${
                           isWinner
                             ? 'scale-110 text-[#0B1712] border-white'
                             : enabled
@@ -896,7 +1184,10 @@ export default function App() {
                 {/* 5x3 Reel Window */}
                 <div
                   data-testid="reel-grid"
-                  className="relative flex-1 grid grid-cols-5 gap-1.5 sm:gap-2.5 p-2 sm:p-3 rounded-xl bg-[#0D1914] border border-[#D4AF37]/40 overflow-hidden"
+                  data-spinning={isSpinning ? 'true' : 'false'}
+                  className={`relative flex-1 grid grid-cols-5 gap-1.5 sm:gap-2.5 p-2 sm:p-3 rounded-xl bg-[#0D1914] border border-[#D4AF37]/40 overflow-hidden transition-transform duration-200 ease-out ${
+                    isSpinning ? 'animate-reel-tilt' : ''
+                  }`}
                 >
                   <PaylineOverlay
                     winningLines={isSpinning ? [] : winningLines}
@@ -933,6 +1224,7 @@ export default function App() {
                             >
                               <SlotSymbolArt
                                 symbolId={symId}
+                                label={t.symbols[symId]}
                                 className={`w-12 h-12 sm:w-16 sm:h-16 md:w-20 md:h-20 ${
                                   isHighlighted ? 'animate-win-tile' : ''
                                 }`}
@@ -945,10 +1237,10 @@ export default function App() {
                   })}
                 </div>
 
-                {/* Right Payline Pins (11–20) */}
+                {/* Right Payline Pins (26–50) */}
                 <div
-                  className="hidden md:flex flex-col justify-between py-1 shrink-0"
-                  aria-label="Paylines 11 to 20"
+                  className="hidden md:grid grid-cols-2 gap-1 py-0.5 content-between shrink-0"
+                  aria-label="Paylines 26 to 50"
                 >
                   {RIGHT_PIN_IDS.map((id) => {
                     const line = PAYLINES[id - 1];
@@ -960,13 +1252,13 @@ export default function App() {
                         key={id}
                         type="button"
                         tabIndex={-1}
-                        onMouseEnter={() => setPreviewLineId(id)}
-                        onMouseLeave={() => setPreviewLineId(null)}
+                        onMouseEnter={() => setHoveredLineId(id)}
+                        onMouseLeave={() => setHoveredLineId((curr) => (curr === id ? null : curr))}
                         onClick={() =>
-                          setPreviewLineId((curr) => (curr === id ? null : id))
+                          setPinnedLineId((curr) => (curr === id ? null : id))
                         }
                         aria-label={`Preview ${line.name}`}
-                        className={`w-7 h-6 rounded text-[11px] font-mono font-bold tabular-nums transition-transform cursor-pointer border ${
+                        className={`w-6 h-[22px] rounded text-[10px] font-mono font-bold tabular-nums transition-transform cursor-pointer border ${
                           isWinner
                             ? 'scale-110 text-[#0B1712] border-white'
                             : enabled
@@ -992,7 +1284,10 @@ export default function App() {
                 </span>
                 {winningLines.length > 1 && !isSpinning && (
                   <span className="font-mono text-xs text-[#FDE68A] tabular-nums shrink-0">
-                    Line {(activeWinCycleIdx % winningLines.length) + 1}/{winningLines.length}
+                    {t.lineCycleCounter(
+                      (activeWinCycleIdx % winningLines.length) + 1,
+                      winningLines.length,
+                    )}
                   </span>
                 )}
               </div>
@@ -1010,7 +1305,7 @@ export default function App() {
               <div className="flex items-center gap-2">
                 <div>
                   <div className="text-[10px] uppercase tracking-widest text-[#A7B5AD]">
-                    Lines
+                    {t.lines}
                   </div>
                   <div
                     data-testid="lines-readout"
@@ -1024,16 +1319,16 @@ export default function App() {
                     type="button"
                     disabled={isSpinning || slotState.freeSpinsRemaining > 0 || slotState.activeLines <= 1}
                     onClick={() => handleAdjustLines(-1)}
-                    aria-label="Decrease active lines"
+                    aria-label={t.decreaseLinesAria}
                     className="w-10 h-10 rounded-lg bg-[#101F18] hover:bg-[#19352A] disabled:opacity-40 text-[#FDE68A] border border-[#D4AF37]/30 flex items-center justify-center transition-colors cursor-pointer disabled:cursor-not-allowed"
                   >
                     <Minus className="w-4 h-4" />
                   </button>
                   <button
                     type="button"
-                    disabled={isSpinning || slotState.freeSpinsRemaining > 0 || slotState.activeLines >= 20}
+                    disabled={isSpinning || slotState.freeSpinsRemaining > 0 || slotState.activeLines >= PAYLINES.length}
                     onClick={() => handleAdjustLines(1)}
-                    aria-label="Increase active lines"
+                    aria-label={t.increaseLinesAria}
                     className="w-10 h-10 rounded-lg bg-[#101F18] hover:bg-[#19352A] disabled:opacity-40 text-[#FDE68A] border border-[#D4AF37]/30 flex items-center justify-center transition-colors cursor-pointer disabled:cursor-not-allowed"
                   >
                     <Plus className="w-4 h-4" />
@@ -1045,7 +1340,7 @@ export default function App() {
               <div className="flex items-center gap-2">
                 <div>
                   <div className="text-[10px] uppercase tracking-widest text-[#A7B5AD]">
-                    Bet / Line
+                    {t.betPerLine}
                   </div>
                   <div
                     data-testid="bet-per-line-readout"
@@ -1063,7 +1358,7 @@ export default function App() {
                       slotState.betPerLine <= BET_PER_LINE_OPTIONS[0]
                     }
                     onClick={() => handleAdjustBetPerLine(-1)}
-                    aria-label="Decrease bet per line"
+                    aria-label={t.decreaseBetAria}
                     className="w-10 h-10 rounded-lg bg-[#101F18] hover:bg-[#19352A] disabled:opacity-40 text-[#FDE68A] border border-[#D4AF37]/30 flex items-center justify-center transition-colors cursor-pointer disabled:cursor-not-allowed"
                   >
                     <Minus className="w-4 h-4" />
@@ -1077,7 +1372,7 @@ export default function App() {
                         BET_PER_LINE_OPTIONS[BET_PER_LINE_OPTIONS.length - 1]
                     }
                     onClick={() => handleAdjustBetPerLine(1)}
-                    aria-label="Increase bet per line"
+                    aria-label={t.increaseBetAria}
                     className="w-10 h-10 rounded-lg bg-[#101F18] hover:bg-[#19352A] disabled:opacity-40 text-[#FDE68A] border border-[#D4AF37]/30 flex items-center justify-center transition-colors cursor-pointer disabled:cursor-not-allowed"
                   >
                     <Plus className="w-4 h-4" />
@@ -1088,13 +1383,13 @@ export default function App() {
               {/* Total Bet Readout */}
               <div className="pl-1">
                 <div className="text-[10px] uppercase tracking-widest text-[#A7B5AD]">
-                  Total Bet
+                  {t.totalBet}
                 </div>
                 <div
                   data-testid="total-bet-readout"
                   className="font-mono text-sm sm:text-base font-bold text-[#FDE68A] tabular-nums"
                 >
-                  {slotState.freeSpinsRemaining > 0 ? 'FREE (3×)' : formatEuro(totalBet)}
+                  {slotState.freeSpinsRemaining > 0 ? t.freeMultiplierTag : formatEuro(totalBet)}
                 </div>
               </div>
             </div>
@@ -1105,7 +1400,7 @@ export default function App() {
                 type="button"
                 onClick={() => {
                   slotAudio.playClick();
-                  setIsTurbo((t) => !t);
+                  setIsTurbo((prev) => !prev);
                 }}
                 aria-pressed={isTurbo}
                 className={`h-11 px-3 rounded-lg text-xs font-semibold border flex items-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap ${
@@ -1115,7 +1410,7 @@ export default function App() {
                 }`}
               >
                 <Zap className="w-4 h-4" />
-                <span>Turbo</span>
+                <span>{t.turbo}</span>
               </button>
 
               <button
@@ -1138,7 +1433,7 @@ export default function App() {
                 }`}
               >
                 <Repeat className="w-4 h-4" />
-                <span>{isAutoSpin ? 'Stop Auto' : 'Auto'}</span>
+                <span>{isAutoSpin ? t.stopAuto : t.auto}</span>
               </button>
 
               <button
@@ -1147,7 +1442,7 @@ export default function App() {
                 onClick={handleBetMax}
                 className="h-11 px-4 rounded-lg bg-[#2A1B12] hover:bg-[#3F271A] disabled:opacity-40 text-[#FDE68A] font-semibold text-xs sm:text-sm border border-[#D4AF37]/50 transition-colors cursor-pointer disabled:cursor-not-allowed whitespace-nowrap"
               >
-                Bet Max
+                {t.betMax}
               </button>
 
               <div className="flex items-center gap-2 w-full sm:w-auto">
@@ -1156,11 +1451,11 @@ export default function App() {
                   data-testid="stop-button"
                   disabled={!isSpinning}
                   onClick={handleStopReels}
-                  aria-label="Stop reels"
+                  aria-label={t.stopReelsAria}
                   className="flex-1 sm:flex-initial h-12 px-5 rounded-lg bg-[#D97706] hover:bg-[#B45309] active:scale-[0.98] disabled:bg-[#1A120D] disabled:text-[#78716C] disabled:border-[#D4AF37]/25 disabled:opacity-65 text-[#0B1712] font-display font-bold text-sm sm:text-base tracking-wider border border-[#FEF3C7]/80 flex items-center justify-center gap-2 transition-all duration-150 cursor-pointer disabled:cursor-not-allowed whitespace-nowrap"
                 >
                   <Square className="w-3.5 h-3.5 fill-current" />
-                  <span>STOP</span>
+                  <span>{t.stop}</span>
                 </button>
 
                 <button
@@ -1171,8 +1466,8 @@ export default function App() {
                   className="flex-[1.6] sm:flex-initial h-12 px-7 sm:px-9 rounded-lg bg-[#B91C1C] hover:bg-[#991B1B] active:scale-[0.98] disabled:opacity-45 text-[#FAF6EE] font-display font-bold text-base sm:text-lg tracking-wider border border-[#FDE68A]/75 shadow-[0_6px_18px_rgba(0,0,0,0.45)] transition-all duration-150 cursor-pointer disabled:cursor-not-allowed whitespace-nowrap"
                 >
                   {slotState.freeSpinsRemaining > 0
-                    ? `FREE SPIN (${slotState.freeSpinsRemaining})`
-                    : 'SPIN'}
+                    ? t.freeSpinCount(slotState.freeSpinsRemaining)
+                    : t.spin}
                 </button>
               </div>
             </div>
@@ -1180,9 +1475,10 @@ export default function App() {
         </div>
       )}
 
-      {/* Paytable & 20 Paylines Inspector Modal */}
+      {/* Paytable & 50 Paylines Inspector Modal */}
       <PaytableModal
         isOpen={paytableOpen}
+        language={language}
         betPerLine={slotState.betPerLine}
         activeLines={slotState.activeLines}
         progressiveJackpot={slotState.progressiveJackpot}
@@ -1192,6 +1488,7 @@ export default function App() {
       {/* Cloud Ledger & High-Roller Leaderboard Modal */}
       <CloudLedgerModal
         isOpen={ledgerOpen}
+        language={language}
         user={user}
         recentSpins={recentSpins}
         leaderboard={leaderboard}
@@ -1200,10 +1497,37 @@ export default function App() {
         onClose={() => setLedgerOpen(false)}
       />
 
+      {/* Cabinet Settings Modal (Language, Volatility, Audio, Music Library, Speed) */}
+      <SettingsModal
+        isOpen={settingsOpen}
+        language={language}
+        volatility={volatility}
+        isSpinning={isSpinning}
+        isMusicOn={isMusicOn}
+        isMuted={isMuted}
+        isTurbo={isTurbo}
+        musicThemes={slotAudio.getThemes()}
+        currentThemeId={currentMusicThemeId}
+        autoAlternateMusic={autoAlternateMusic}
+        onChangeLanguage={handleChangeLanguage}
+        onChangeVolatility={handleChangeVolatility}
+        onToggleMusic={toggleMusic}
+        onToggleMute={toggleMute}
+        onToggleTurbo={() => {
+          slotAudio.playClick();
+          setIsTurbo((prev) => !prev);
+        }}
+        onSelectMusicTheme={handleSelectMusicTheme}
+        onNextMusicTheme={handleNextMusicTheme}
+        onToggleAutoAlternateMusic={handleToggleAutoAlternateMusic}
+        onClose={() => setSettingsOpen(false)}
+      />
+
       {/* Pause & Game Over Modals */}
       {(gameState === 'paused' || gameState === 'gameover') && (
         <StatusModal
           mode={gameState}
+          language={language}
           balance={slotState.balance}
           stats={slotState.stats}
           onResume={
@@ -1215,6 +1539,14 @@ export default function App() {
               : undefined
           }
           onResetBankroll={handleResetBankroll}
+          onOpenSettings={
+            gameState === 'paused'
+              ? () => {
+                  slotAudio.playClick();
+                  setSettingsOpen(true);
+                }
+              : undefined
+          }
           onOpenPaytable={
             gameState === 'paused'
               ? () => {

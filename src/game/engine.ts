@@ -8,14 +8,24 @@ import {
   PROGRESSIVE_CONTRIBUTION_RATE,
   PROGRESSIVE_SEED,
   REEL_STRIPS,
+  REEL_STRIPS_RARE,
   SCATTER_TOTAL_BET_MULTIPLIERS,
   STARTING_BALANCE,
   SYMBOLS,
 } from './constants';
-import { Grid, PaylineDef, SlotMachineState, SpinResult, SymbolId, WinningLine } from './types';
+import {
+  Grid,
+  PaylineDef,
+  SlotMachineState,
+  SpinResult,
+  SymbolId,
+  VolatilityMode,
+  WinningLine,
+} from './types';
 
 export function createInitialSlotState(
   initialJackpot: number = PROGRESSIVE_SEED,
+  volatility?: VolatilityMode,
 ): SlotMachineState {
   return {
     balance: STARTING_BALANCE,
@@ -24,6 +34,7 @@ export function createInitialSlotState(
     betPerLine: DEFAULT_BET_PER_LINE,
     freeSpinsRemaining: 0,
     freeSpinsTotalWin: 0,
+    ...(volatility ? { volatility } : {}),
     lastResult: null,
     stats: {
       totalSpins: 0,
@@ -40,11 +51,15 @@ export function roundCurrency(value: number): number {
   return Math.round((value + Number.EPSILON) * 100) / 100;
 }
 
-export function spinReels(rng: () => number = Math.random): Grid {
+export function spinReels(
+  rng: () => number = Math.random,
+  volatility?: VolatilityMode,
+): Grid {
+  const strips = volatility === 'rare' ? REEL_STRIPS_RARE : REEL_STRIPS;
   const cols: SymbolId[][] = [];
 
   for (let col = 0; col < 5; col++) {
-    const strip = REEL_STRIPS[col];
+    const strip = strips[col];
     const startIdx = Math.floor(rng() * strip.length);
     const colSymbols: SymbolId[] = [
       strip[startIdx % strip.length],
@@ -239,13 +254,54 @@ export function hasProgressiveJackpotWin(winningLines: WinningLine[]): boolean {
   return winningLines.some((w) => w.symbolId === 'WILD' && w.matchCount === 5);
 }
 
+function applyVolatilityShaping(
+  baseResult: SpinResult,
+  volatility?: VolatilityMode,
+): SpinResult {
+  if (volatility !== 'rare') {
+    return {
+      ...baseResult,
+      ...(volatility ? { volatility } : {}),
+    };
+  }
+
+  const adjustedLines: WinningLine[] = baseResult.winningLines.map((line) => {
+    const varianceScale =
+      line.matchCount === 5 ? 2.5 : line.matchCount === 4 ? 1.75 : 0.75;
+    return {
+      ...line,
+      payout: roundCurrency(line.payout * varianceScale),
+    };
+  });
+
+  const adjustedScatterPayout = roundCurrency(baseResult.scatterPayout * 1.75);
+  const adjustedFreeSpins =
+    baseResult.freeSpinsAwarded > 0 ? baseResult.freeSpinsAwarded + 3 : 0;
+  const adjustedLineWinTotal = roundCurrency(
+    adjustedLines.reduce((acc, line) => acc + line.payout, 0),
+  );
+  const adjustedTotalWin = roundCurrency(adjustedLineWinTotal + adjustedScatterPayout);
+
+  return {
+    ...baseResult,
+    winningLines: adjustedLines,
+    scatterPayout: adjustedScatterPayout,
+    lineWinTotal: adjustedLineWinTotal,
+    totalWin: adjustedTotalWin,
+    freeSpinsAwarded: adjustedFreeSpins,
+    volatility,
+  };
+}
+
 export function executeSpin(
   state: SlotMachineState,
   gridOverride?: Grid,
   rng: () => number = Math.random,
+  volatilityOverride?: VolatilityMode,
 ): { nextState: SlotMachineState; result: SpinResult } {
   const isFree = state.freeSpinsRemaining > 0;
   const totalBet = isFree ? 0 : roundCurrency(state.activeLines * state.betPerLine);
+  const volatility: VolatilityMode | undefined = volatilityOverride ?? state.volatility;
 
   if (!isFree && state.balance + 1e-9 < totalBet) {
     throw new Error('Insufficient balance for spin');
@@ -257,8 +313,9 @@ export function executeSpin(
     Math.max(PROGRESSIVE_SEED, state.progressiveJackpot) + jackpotContribution,
   );
 
-  const grid = gridOverride ?? spinReels(rng);
-  const baseResult = evaluateGrid(grid, state.activeLines, state.betPerLine, isFree);
+  const grid = gridOverride ?? spinReels(rng, volatility);
+  const rawResult = evaluateGrid(grid, state.activeLines, state.betPerLine, isFree);
+  const baseResult = applyVolatilityShaping(rawResult, volatility);
 
   const wonJackpot = hasProgressiveJackpotWin(baseResult.winningLines);
   const jackpotWon = wonJackpot ? potBeforeSpin : 0;
@@ -288,6 +345,7 @@ export function executeSpin(
     progressiveJackpot: nextProgressiveJackpot,
     freeSpinsRemaining: nextFreeSpins,
     freeSpinsTotalWin: nextFreeSpinsTotalWin,
+    ...(volatility ? { volatility } : {}),
     lastResult: result,
     stats: {
       totalSpins: state.stats.totalSpins + 1,

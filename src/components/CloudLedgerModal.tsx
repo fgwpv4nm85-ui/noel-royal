@@ -2,10 +2,12 @@ import React, { useState } from 'react';
 import type { User } from 'firebase/auth';
 import { LogIn, Trophy, History, X } from 'lucide-react';
 import { formatEuro } from '../game/constants';
+import { getTranslation, LanguageCode } from '../game/i18n';
 import { CloudSpinEntry, LeaderboardEntry } from '../game/cloudSync';
 
 interface CloudLedgerModalProps {
   isOpen: boolean;
+  language: LanguageCode;
   user: User | null;
   recentSpins: CloudSpinEntry[];
   leaderboard: LeaderboardEntry[];
@@ -16,6 +18,7 @@ interface CloudLedgerModalProps {
 
 export const CloudLedgerModal: React.FC<CloudLedgerModalProps> = ({
   isOpen,
+  language,
   user,
   recentSpins,
   leaderboard,
@@ -26,6 +29,8 @@ export const CloudLedgerModal: React.FC<CloudLedgerModalProps> = ({
   const [tab, setTab] = useState<'leaderboard' | 'spins'>('leaderboard');
 
   if (!isOpen) return null;
+
+  const t = getTranslation(language);
 
   return (
     <div
@@ -42,18 +47,18 @@ export const CloudLedgerModal: React.FC<CloudLedgerModalProps> = ({
               id="ledger-modal-title"
               className="font-display text-xl font-bold tracking-wider text-[#FDE68A]"
             >
-              Cabinet Ledger & Hall of Fame
+              {t.ledgerTitle}
             </h2>
             <p className="text-xs text-[#D6D0C4] mt-0.5">
               {user
-                ? `Synced to cloud as ${user.displayName || user.email || 'Player'}`
-                : 'Sign in with Google to persist your bankroll and spin ledger'}
+                ? t.ledgerCloudSynced(user.displayName || user.email || 'Player')
+                : t.ledgerSignInPrompt}
             </p>
           </div>
           <button
             type="button"
             onClick={onClose}
-            aria-label="Close ledger"
+            aria-label={t.closeLedgerAria}
             className="w-10 h-10 flex items-center justify-center rounded-lg bg-[#2B1810] hover:bg-[#3F2318] text-[#FDE68A] border border-[#D4AF37]/30 transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
@@ -73,7 +78,7 @@ export const CloudLedgerModal: React.FC<CloudLedgerModalProps> = ({
               }`}
             >
               <Trophy className="w-3.5 h-3.5" />
-              <span>Hall of Fame</span>
+              <span>{t.hallOfFame}</span>
             </button>
             <button
               type="button"
@@ -85,7 +90,7 @@ export const CloudLedgerModal: React.FC<CloudLedgerModalProps> = ({
               }`}
             >
               <History className="w-3.5 h-3.5" />
-              <span>My Spin History</span>
+              <span>{t.spinHistory}</span>
             </button>
           </div>
 
@@ -97,7 +102,7 @@ export const CloudLedgerModal: React.FC<CloudLedgerModalProps> = ({
               className="h-9 px-3.5 rounded-lg bg-[#B91C1C] hover:bg-[#991B1B] disabled:opacity-50 text-[#FAF6EE] text-xs font-semibold border border-[#FDE68A]/60 flex items-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap"
             >
               <LogIn className="w-3.5 h-3.5" />
-              <span>{authBusy ? 'Signing in...' : 'Sign in with Google'}</span>
+              <span>{authBusy ? t.signingIn : t.signInWithGoogle}</span>
             </button>
           )}
         </div>
@@ -107,7 +112,7 @@ export const CloudLedgerModal: React.FC<CloudLedgerModalProps> = ({
           {tab === 'leaderboard' ? (
             leaderboard.length === 0 ? (
               <div className="py-10 text-center text-sm text-[#A7B5AD] border border-[#D4AF37]/20 rounded-lg bg-[#0B1712]">
-                No high-roller records yet. Sign in and spin to set the first benchmark!
+                {t.noLeaderboardYet}
               </div>
             ) : (
               <div className="divide-y divide-[#D4AF37]/15 border border-[#D4AF37]/25 rounded-lg bg-[#0B1712] overflow-hidden">
@@ -126,16 +131,16 @@ export const CloudLedgerModal: React.FC<CloudLedgerModalProps> = ({
                         </span>
                         <div className="min-w-0">
                           <div className="text-sm font-semibold text-[#FAF6EE] truncate">
-                            {entry.displayName} {isMe ? '(You)' : ''}
+                            {entry.displayName} {isMe ? t.youTag : ''}
                           </div>
                           <div className="text-xs text-[#A7B5AD] tabular-nums">
-                            {entry.totalSpins} spins · Peak {formatEuro(entry.peakBalance)}
+                            {t.spinsSummaryLine(entry.totalSpins, formatEuro(entry.peakBalance))}
                           </div>
                         </div>
                       </div>
                       <div className="text-right shrink-0">
                         <div className="text-[10px] uppercase tracking-wider text-[#A7B5AD]">
-                          Best Win
+                          {t.bestWin}
                         </div>
                         <div className="font-mono text-sm font-bold text-[#FDE047] tabular-nums">
                           {formatEuro(entry.biggestWin)}
@@ -149,7 +154,7 @@ export const CloudLedgerModal: React.FC<CloudLedgerModalProps> = ({
           ) : !user ? (
             <div className="py-10 px-6 text-center space-y-4 border border-[#D4AF37]/20 rounded-lg bg-[#0B1712]">
               <p className="text-sm text-[#D6D0C4]">
-                Sign in with Google to save your 2 500.00 € bankroll and inspect your cloud spin history across sessions.
+                {t.signInHistoryPrompt}
               </p>
               <button
                 type="button"
@@ -158,12 +163,12 @@ export const CloudLedgerModal: React.FC<CloudLedgerModalProps> = ({
                 className="px-5 py-2.5 rounded-lg bg-[#B91C1C] hover:bg-[#991B1B] text-[#FAF6EE] text-sm font-semibold border border-[#FDE68A]/60 inline-flex items-center gap-2 transition-colors cursor-pointer"
               >
                 <LogIn className="w-4 h-4" />
-                <span>{authBusy ? 'Signing in...' : 'Sign in with Google'}</span>
+                <span>{authBusy ? t.signingIn : t.signInWithGoogle}</span>
               </button>
             </div>
           ) : recentSpins.length === 0 ? (
             <div className="py-10 text-center text-sm text-[#A7B5AD] border border-[#D4AF37]/20 rounded-lg bg-[#0B1712]">
-              No cloud spins recorded yet. Place a spin to log your first entry.
+              {t.noCloudSpinsYet}
             </div>
           ) : (
             <div className="divide-y divide-[#D4AF37]/15 border border-[#D4AF37]/25 rounded-lg bg-[#0B1712] overflow-hidden">
@@ -177,8 +182,8 @@ export const CloudLedgerModal: React.FC<CloudLedgerModalProps> = ({
                       {spin.summary}
                     </div>
                     <div className="text-xs text-[#A7B5AD] tabular-nums mt-0.5">
-                      {spin.wasFreeSpin ? 'Free Spin (3×)' : `Bet ${formatEuro(spin.totalBet)}`} ·{' '}
-                      {spin.activeLines} lines · Balance {formatEuro(spin.balanceAfter)}
+                      {spin.wasFreeSpin ? t.freeSpinTag : t.betTag(formatEuro(spin.totalBet))} ·{' '}
+                      {t.linesTag(spin.activeLines)} · {t.balance} {formatEuro(spin.balanceAfter)}
                     </div>
                   </div>
                   <div

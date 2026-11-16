@@ -64,12 +64,36 @@
   }
 }
 
+@keyframes reelTilt {
+  0% {
+    transform: perspective(1100px) rotateX(0deg) rotateY(0deg) rotateZ(0deg) scale(1);
+  }
+  25% {
+    transform: perspective(1100px) rotateX(2.4deg) rotateY(-1.8deg) rotateZ(-0.5deg) scale(1.012);
+  }
+  50% {
+    transform: perspective(1100px) rotateX(-1.8deg) rotateY(1.8deg) rotateZ(0.5deg) scale(1.015);
+  }
+  75% {
+    transform: perspective(1100px) rotateX(2deg) rotateY(-1.2deg) rotateZ(-0.35deg) scale(1.01);
+  }
+  100% {
+    transform: perspective(1100px) rotateX(0deg) rotateY(0deg) rotateZ(0deg) scale(1);
+  }
+}
+
 .animate-reel-cycle {
   animation: reelCycle 0.14s linear infinite;
 }
 
 .animate-reel-settle {
   animation: reelSettle 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-reel-tilt {
+  animation: reelTilt 0.56s cubic-bezier(0.37, 0, 0.63, 1) infinite;
+  transform-origin: center center;
+  will-change: transform;
 }
 
 .animate-win-tile {
@@ -84,6 +108,7 @@
 @media (prefers-reduced-motion: reduce) {
   .animate-reel-cycle,
   .animate-reel-settle,
+  .animate-reel-tilt,
   .animate-win-tile,
   .animate-payline-draw {
     animation: none !important;

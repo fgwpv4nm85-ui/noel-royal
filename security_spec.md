@@ -4,7 +4,7 @@
 1. **Identity Isolation (`users/{userId}`)**: Only the authenticated, email-verified user whose `request.auth.uid == userId` may read, create, or update their `users/{userId}` document. No user can list all users.
 2. **Immutable Ledger (`users/{userId}/spins/{spinId}`)**: Spin records belong strictly to the verified parent `users/{userId}` document (checked via `exists()` on create and `get()`/`uid` alignment). Spin records are append-only (`allow update, delete: if false`).
 3. **Zero PII on Public Leaderboard (`leaderboard/{userId}`)**: `leaderboard` entries store only `uid`, `displayName`, `biggestWin`, `peakBalance`, `totalSpins`, and `updatedAt` (zero emails or private data). Only the verified owner (`request.auth.uid == userId`) can create or update their own leaderboard row.
-4. **Server Timestamps & Strict Bounds**: All `createdAt` / `updatedAt` fields must equal `request.time`. All numeric fields (`balance`, `activeLines`, `betPerLine`, `biggestWin`, etc.) are bounded (`activeLines` in `1..20`, `betPerLine` in `0.10..25.00`, non-negative counts/amounts). No shadow/ghost fields are permitted (`hasOnly()`).
+4. **Server Timestamps & Strict Bounds**: All `createdAt` / `updatedAt` fields must equal `request.time`. All numeric fields (`balance`, `activeLines`, `betPerLine`, `biggestWin`, etc.) are bounded (`activeLines` in `1..50`, `betPerLine` in `0.10..25.00`, non-negative counts/amounts). No shadow/ghost fields are permitted (`hasOnly()`).
 
 ## 2. Adversarial "Dirty Dozen" Payloads (All Must Return PERMISSION_DENIED)
 1. **Cross-User Profile Read**: User B attempts `get(/users/userA)`.

@@ -55,6 +55,8 @@ export interface WinningLine {
   color: string;
 }
 
+export type VolatilityMode = 'rare';
+
 export interface SpinResult {
   grid: Grid;
   winningLines: WinningLine[];
@@ -68,6 +70,7 @@ export interface SpinResult {
   freeSpinsAwarded: number;
   multiplierApplied: number;
   wasFreeSpin: boolean;
+  volatility?: VolatilityMode;
 }
 
 export type GameState = 'title' | 'playing' | 'paused' | 'gameover';
@@ -88,6 +91,7 @@ export interface SlotMachineState {
   betPerLine: number;
   freeSpinsRemaining: number;
   freeSpinsTotalWin: number;
+  volatility?: VolatilityMode;
   lastResult: SpinResult | null;
   stats: SessionStats;
 }

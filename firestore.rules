@@ -82,7 +82,7 @@ service cloud.firestore {
       && isValidNumber(data.balance, 0, 100000000)
       && data.activeLines is int
       && data.activeLines >= 1
-      && data.activeLines <= 20
+      && data.activeLines <= 50
       && isValidNumber(data.betPerLine, 0.1, 25)
       && data.freeSpinsRemaining is int
       && data.freeSpinsRemaining >= 0
@@ -132,12 +132,12 @@ service cloud.firestore {
       && isValidId(data.uid)
       && data.uid == request.auth.uid
       && data.uid == userId
-      && isValidNumber(data.totalBet, 0, 500)
+      && isValidNumber(data.totalBet, 0, 1250)
       && isValidNumber(data.totalWin, 0, 100000000)
       && isValidNumber(data.balanceAfter, 0, 100000000)
       && data.activeLines is int
       && data.activeLines >= 1
-      && data.activeLines <= 20
+      && data.activeLines <= 50
       && isValidNumber(data.betPerLine, 0.1, 25)
       && data.wasFreeSpin is bool
       && data.freeSpinsAwarded is int
@@ -145,7 +145,7 @@ service cloud.firestore {
       && data.freeSpinsAwarded <= 100
       && data.winningLineCount is int
       && data.winningLineCount >= 0
-      && data.winningLineCount <= 20
+      && data.winningLineCount <= 50
       && data.summary is string
       && data.summary.size() >= 1
       && data.summary.size() <= 200
@@ -312,10 +312,10 @@ service cloud.firestore {
         && isValidProgressiveJackpot(incoming())
         && incoming().updatedAt == request.time
         && (
-          // Action: Spin contribution (atomic monotonic increment up to 15 EUR per spin)
+          // Action: Spin contribution (atomic monotonic increment up to 30 EUR per spin)
           (incoming().diff(existing()).affectedKeys().hasOnly(['amount', 'updatedAt'])
             && incoming().amount >= existing().amount
-            && incoming().amount <= existing().amount + 15)
+            && incoming().amount <= existing().amount + 30)
           ||
           // Action: Jackpot claimed and reset to seed
           (incoming().diff(existing()).affectedKeys().hasOnly([

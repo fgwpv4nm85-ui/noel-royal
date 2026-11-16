@@ -19,6 +19,7 @@ import {
   BET_PER_LINE_OPTIONS,
   DEFAULT_ACTIVE_LINES,
   DEFAULT_BET_PER_LINE,
+  PAYLINES,
   PROGRESSIVE_SEED,
   STARTING_BALANCE,
 } from './constants';
@@ -67,7 +68,7 @@ function clampBetPerLine(val: number): number {
 
 function clampActiveLines(val: number): number {
   const intVal = Math.round(val);
-  return Math.max(1, Math.min(20, intVal || DEFAULT_ACTIVE_LINES));
+  return Math.max(1, Math.min(PAYLINES.length, intVal || DEFAULT_ACTIVE_LINES));
 }
 
 async function fetchCurrentJackpotAmount(): Promise<number> {
@@ -196,7 +197,7 @@ async function syncProgressiveJackpot(
   const jackpotRef = doc(db, 'jackpots', 'progressive');
   const clampedContribution = Math.max(
     0.1,
-    Math.min(15, roundCurrency(result.jackpotContribution)),
+    Math.min(30, roundCurrency(result.jackpotContribution)),
   );
 
   if (result.jackpotWon > 0) {
@@ -300,14 +301,14 @@ async function commitSpinOutcome(
 
   batch.set(spinRef, {
     uid: user.uid,
-    totalBet: Math.max(0, Math.min(500, totalBet)),
+    totalBet: Math.max(0, Math.min(1250, totalBet)),
     totalWin: Math.max(0, roundCurrency(result.totalWin)),
     balanceAfter: Math.max(0, roundCurrency(nextState.balance)),
     activeLines,
     betPerLine,
     wasFreeSpin: Boolean(result.wasFreeSpin),
     freeSpinsAwarded: Math.max(0, Math.round(result.freeSpinsAwarded)),
-    winningLineCount: Math.max(0, Math.min(20, result.winningLines.length)),
+    winningLineCount: Math.max(0, Math.min(PAYLINES.length, result.winningLines.length)),
     summary: sanitizeSummary(summary),
     createdAt: serverTimestamp(),
   });
@@ -464,7 +465,7 @@ export function subscribeRecentSpins(
           totalBet: Number(data.totalBet ?? 0),
           totalWin: Number(data.totalWin ?? 0),
           balanceAfter: Number(data.balanceAfter ?? 0),
-          activeLines: Number(data.activeLines ?? 20),
+          activeLines: Number(data.activeLines ?? DEFAULT_ACTIVE_LINES),
           betPerLine: Number(data.betPerLine ?? 1),
           wasFreeSpin: Boolean(data.wasFreeSpin),
           freeSpinsAwarded: Number(data.freeSpinsAwarded ?? 0),

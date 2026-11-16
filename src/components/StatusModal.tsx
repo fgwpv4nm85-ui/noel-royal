@@ -1,27 +1,33 @@
 import React from 'react';
 import { formatEuro } from '../game/constants';
+import { getTranslation, LanguageCode } from '../game/i18n';
 import { SessionStats } from '../game/types';
 
 interface StatusModalProps {
   mode: 'paused' | 'gameover';
+  language: LanguageCode;
   balance: number;
   stats: SessionStats;
   onResume?: () => void;
   onResetBankroll: () => void;
+  onOpenSettings?: () => void;
   onOpenPaytable?: () => void;
   onReturnTitle: () => void;
 }
 
 export const StatusModal: React.FC<StatusModalProps> = ({
   mode,
+  language,
   balance,
   stats,
   onResume,
   onResetBankroll,
+  onOpenSettings,
   onOpenPaytable,
   onReturnTitle,
 }) => {
   const isGameOver = mode === 'gameover';
+  const t = getTranslation(language);
 
   return (
     <div
@@ -36,12 +42,10 @@ export const StatusModal: React.FC<StatusModalProps> = ({
             id="status-modal-title"
             className="font-display text-2xl font-bold tracking-wider text-[#FDE68A]"
           >
-            {isGameOver ? 'Out of Credits' : 'Cabinet Paused'}
+            {isGameOver ? t.outOfCredits : t.cabinetPaused}
           </h2>
           <p className="text-sm text-[#D6D0C4] mt-1">
-            {isGameOver
-              ? 'Your bankroll is below the minimum 0.10 € bet.'
-              : 'Review your session ledger or adjust the cabinet.'}
+            {isGameOver ? t.outOfCreditsDesc : t.pausedDesc}
           </p>
         </div>
 
@@ -50,7 +54,7 @@ export const StatusModal: React.FC<StatusModalProps> = ({
           <div className="grid grid-cols-3 gap-3 text-center">
             <div className="p-3 rounded-lg bg-[#0B1712] border border-[#D4AF37]/20">
               <div className="text-[11px] uppercase tracking-wider text-[#A7B5AD]">
-                Balance
+                {t.balance}
               </div>
               <div className="font-mono text-xs sm:text-sm font-bold text-[#FAF6EE] tabular-nums whitespace-nowrap mt-1">
                 {formatEuro(balance)}
@@ -58,7 +62,7 @@ export const StatusModal: React.FC<StatusModalProps> = ({
             </div>
             <div className="p-3 rounded-lg bg-[#0B1712] border border-[#D4AF37]/20">
               <div className="text-[11px] uppercase tracking-wider text-[#A7B5AD]">
-                Spins
+                {t.spinsLabel}
               </div>
               <div className="font-mono text-xs sm:text-sm font-bold text-[#FAF6EE] tabular-nums whitespace-nowrap mt-1">
                 {stats.totalSpins}
@@ -66,7 +70,7 @@ export const StatusModal: React.FC<StatusModalProps> = ({
             </div>
             <div className="p-3 rounded-lg bg-[#0B1712] border border-[#D4AF37]/20">
               <div className="text-[11px] uppercase tracking-wider text-[#A7B5AD]">
-                Best Win
+                {t.bestWin}
               </div>
               <div className="font-mono text-xs sm:text-sm font-bold text-[#FDE68A] tabular-nums whitespace-nowrap mt-1">
                 {formatEuro(stats.biggestWin)}
@@ -81,7 +85,7 @@ export const StatusModal: React.FC<StatusModalProps> = ({
                 onClick={onResume}
                 className="w-full py-3 px-4 rounded-lg bg-[#B91C1C] hover:bg-[#991B1B] text-[#FAF6EE] font-semibold text-base border border-[#F59E0B]/60 transition-colors cursor-pointer"
               >
-                Resume
+                {t.resume}
               </button>
             )}
 
@@ -95,8 +99,18 @@ export const StatusModal: React.FC<StatusModalProps> = ({
                   : 'bg-[#162920] hover:bg-[#1D352A] text-[#FDE68A] border-[#D4AF37]/35'
               }`}
             >
-              {isGameOver ? 'Play Again (2 500.00 €)' : 'Reset Bankroll (2 500.00 €)'}
+              {isGameOver ? t.playAgain : t.resetBankroll}
             </button>
+
+            {!isGameOver && onOpenSettings && (
+              <button
+                type="button"
+                onClick={onOpenSettings}
+                className="w-full py-2.5 px-4 rounded-lg bg-[#162920] hover:bg-[#1D352A] text-[#FAF6EE] font-medium text-sm border border-[#D4AF37]/25 transition-colors cursor-pointer"
+              >
+                {t.cabinetSettingsMenu}
+              </button>
+            )}
 
             {!isGameOver && onOpenPaytable && (
               <button
@@ -104,7 +118,7 @@ export const StatusModal: React.FC<StatusModalProps> = ({
                 onClick={onOpenPaytable}
                 className="w-full py-2.5 px-4 rounded-lg bg-[#162920] hover:bg-[#1D352A] text-[#FAF6EE] font-medium text-sm border border-[#D4AF37]/25 transition-colors cursor-pointer"
               >
-                Paytable & 20 Lines
+                {t.paytableMenu}
               </button>
             )}
 
@@ -113,7 +127,7 @@ export const StatusModal: React.FC<StatusModalProps> = ({
               onClick={onReturnTitle}
               className="w-full py-2.5 px-4 rounded-lg bg-transparent hover:bg-white/5 text-[#CBD5E1] font-medium text-sm border border-white/15 transition-colors cursor-pointer"
             >
-              Title Screen
+              {t.titleScreenMenu}
             </button>
           </div>
         </div>

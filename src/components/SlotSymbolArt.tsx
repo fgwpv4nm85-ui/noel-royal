@@ -6,12 +6,14 @@ interface SlotSymbolArtProps {
   symbolId: SymbolId;
   className?: string;
   compact?: boolean;
+  label?: string;
 }
 
 export const SlotSymbolArt: React.FC<SlotSymbolArtProps> = ({
   symbolId,
   className = 'w-16 h-16',
   compact = false,
+  label,
 }) => {
   const def = SYMBOLS[symbolId];
   const uid = useId().replace(/:/g, '');
@@ -22,7 +24,7 @@ export const SlotSymbolArt: React.FC<SlotSymbolArtProps> = ({
   return (
     <div
       className={`relative flex flex-col items-center justify-center select-none ${className}`}
-      aria-label={def.name}
+      aria-label={label ?? def.name}
     >
       <svg
         viewBox="0 0 80 80"

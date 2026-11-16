@@ -1,8 +1,12 @@
 import React, { useState } from 'react';
 import type { User } from 'firebase/auth';
 import titleBgUrl from '../assets/images/title_bg_1794724369989.jpg';
+import { getTranslation, LanguageCode } from '../game/i18n';
+import { LanguageSelector } from './LanguageSelector';
 
 interface TitleScreenProps {
+  language: LanguageCode;
+  onChangeLanguage: (lang: LanguageCode) => void;
   onStart: () => void;
   onOpenPaytable: () => void;
   user: User | null;
@@ -12,6 +16,8 @@ interface TitleScreenProps {
 }
 
 export const TitleScreen: React.FC<TitleScreenProps> = ({
+  language,
+  onChangeLanguage,
   onStart,
   onOpenPaytable,
   user,
@@ -20,6 +26,7 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
   onSignOut,
 }) => {
   const [imgFailed, setImgFailed] = useState(false);
+  const t = getTranslation(language);
 
   return (
     <div className="relative w-full h-screen min-h-[600px] overflow-hidden bg-[#07120E] text-[#FAF6EE] flex flex-col justify-between">
@@ -49,6 +56,15 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
         aria-hidden="true"
       />
 
+      {/* Top-right Language Selector */}
+      <div className="relative z-20 flex justify-end px-6 sm:px-12 lg:px-20 pt-5">
+        <LanguageSelector
+          language={language}
+          onChangeLanguage={onChangeLanguage}
+          variant="title"
+        />
+      </div>
+
       {/* Main Content anchored in the left 45% negative-space region */}
       <main className="relative z-10 flex-1 flex items-center px-6 sm:px-12 lg:px-20 max-w-4xl">
         <div className="flex flex-col items-start gap-7 max-w-xl">
@@ -57,7 +73,7 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
             viewBox="0 0 460 156"
             className="w-full max-w-[440px] h-auto drop-shadow-[0_6px_18px_rgba(0,0,0,0.65)]"
             role="img"
-            aria-label="Noël Royale — 5x3 Festive Slot Machine"
+            aria-label={`Noël Royale — ${t.titleSubtitle}`}
           >
             <defs>
               <linearGradient id="crestGold" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -101,16 +117,15 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
               fontWeight="600"
               letterSpacing="3.5"
             >
-              5×3 ALPINE CABINET · 20 PAYLINES
+              {t.titleSubtitle}
             </text>
           </svg>
 
           <p className="text-base sm:text-lg text-[#E2DDD3] leading-relaxed max-w-md font-normal">
-            Spin five mahogany reels trimmed in brass. Match festive heirlooms across 20 paylines,
-            pair with Santa Wilds, and land 3+ North Stars for 3× Free Spins.
+            {t.titleDescription}
           </p>
 
-          {/* Primary & Secondary Actions (<= 3 menu actions) */}
+          {/* Primary & Secondary Actions */}
           <div className="flex flex-wrap items-center gap-3.5 pt-1">
             <button
               type="button"
@@ -118,7 +133,7 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
               onClick={onStart}
               className="px-8 py-3.5 rounded-lg bg-[#B91C1C] hover:bg-[#991B1B] active:scale-[0.98] text-[#FAF6EE] font-semibold text-base tracking-wide border border-[#F59E0B]/70 shadow-[0_6px_20px_rgba(0,0,0,0.45)] transition-all duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#FDE68A] cursor-pointer whitespace-nowrap shrink-0"
             >
-              Play
+              {t.play}
             </button>
 
             <button
@@ -126,7 +141,7 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
               onClick={onOpenPaytable}
               className="px-6 py-3.5 rounded-lg bg-[#12261E]/90 hover:bg-[#19352A] active:scale-[0.98] text-[#FDE68A] font-medium text-base border border-[#D4AF37]/40 transition-all duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#FDE68A] cursor-pointer whitespace-nowrap shrink-0"
             >
-              Paytable
+              {t.paytable}
             </button>
 
             {user ? (
@@ -136,7 +151,7 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
                 onClick={onSignOut}
                 className="px-5 py-3.5 rounded-lg bg-[#19110C]/90 hover:bg-[#2B1810] disabled:opacity-50 text-[#E2DDD3] font-medium text-sm border border-[#D4AF37]/30 transition-all duration-150 cursor-pointer whitespace-nowrap shrink-0"
               >
-                {user.displayName ? `${user.displayName.split(' ')[0]} · Sign out` : 'Sign out'}
+                {user.displayName ? `${user.displayName.split(' ')[0]} · ${t.signOut}` : t.signOut}
               </button>
             ) : (
               <button
@@ -145,7 +160,7 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
                 onClick={onSignIn}
                 className="px-5 py-3.5 rounded-lg bg-[#19110C]/90 hover:bg-[#2B1810] disabled:opacity-50 text-[#FDE68A] font-medium text-sm border border-[#D4AF37]/30 transition-all duration-150 cursor-pointer whitespace-nowrap shrink-0"
               >
-                {authBusy ? 'Signing in...' : 'Sign in to Save'}
+                {authBusy ? t.signingIn : t.signInToSave}
               </button>
             )}
           </div>
@@ -155,7 +170,7 @@ export const TitleScreen: React.FC<TitleScreenProps> = ({
       {/* Single flat, borderless control hint line in bottom safe margin */}
       <footer className="relative z-10 px-6 sm:px-12 lg:px-20 pb-6">
         <p className="text-xs sm:text-sm text-[#CBD5E1]/80 tracking-wide font-medium">
-          Enter or Space Play · Space Spin · P Paytable · M Mute · Esc Pause
+          {t.titleFooterHints}
         </p>
       </footer>
     </div>
